@@ -230,10 +230,10 @@ int main(int argc, char **argv)
             for (int j = 0; j < glb_n; j++)
                 glb_B_i[j] = i * 0.19 + j * 0.24;
         }
-        double alpha = 1.0, beta = 0.0;
         if (use_CUDA == 0)
         {
             #ifdef USE_MKL
+            double alpha = 1.0, beta = 0.0;
             sparse_matrix_t mkl_spA;
             struct matrix_descr mkl_descA;
             mkl_descA.type = SPARSE_MATRIX_TYPE_GENERAL;

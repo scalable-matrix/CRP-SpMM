@@ -351,7 +351,7 @@ void crpspmm_engine_init(
         int *a2a_B_sdispls   = (int *) malloc(sizeof(int) * (np_row + 1));
         int *a2a_B_recv_ridx = (int *) malloc(sizeof(int) * loc_B_nrow);
         int *a2a_B_send_ridx = (int *) malloc(sizeof(int) * loc_B_nrow);
-        int B_recv_row_cnt = 0, B_recv_src_rank = 0, B_send_row_cnt = 0;
+        int B_recv_row_cnt = 0, B_recv_src_rank = 0;
         memset(flag, 0, sizeof(int) * loc_B_nrow);
         memset(a2a_B_recvcnts, 0, sizeof(int) * np_row);
         for (int i = 0; i < loc_A_nnz; i++) flag[loc_A_colidx[i]] = 1;
@@ -372,7 +372,6 @@ void crpspmm_engine_init(
             a2a_B_rdispls[i + 1] = a2a_B_rdispls[i] + a2a_B_recvcnts[i];
             a2a_B_sdispls[i + 1] = a2a_B_sdispls[i] + a2a_B_sendcnts[i];
         }
-        B_send_row_cnt = a2a_B_sdispls[np_row];
         MPI_Alltoallv(
             a2a_B_recv_ridx, a2a_B_recvcnts, a2a_B_rdispls, MPI_INT,
             a2a_B_send_ridx, a2a_B_sendcnts, a2a_B_sdispls, MPI_INT, engine->comm_col
@@ -756,11 +755,11 @@ void crpspmm_engine_print_stat(crpspmm_engine_p engine)
         printf("----------------------------------------------------------------\n");
         printf("------------------ Communicated Matrix Elements -----------------\n");
         printf("                               min           max            sum\n");
-        printf("Redist A                %10llu    %10llu    %11llu\n", cs_min[0], cs_max[0], cs_sum[0]);
-        printf("Allgatherv A            %10llu    %10llu    %11llu\n", cs_min[1], cs_max[1], cs_sum[1]);
-        printf("Redist B                %10llu    %10llu    %11llu\n", cs_min[2], cs_max[2], cs_sum[2]);
-        printf("Alltoallv B             %10llu    %10llu    %11llu\n", cs_min[3], cs_max[3], cs_sum[3]);
-        printf("Alltoallv B necessary   %10llu    %10llu    %11llu\n", cs_min[4], cs_max[4], cs_sum[4]);
+        printf("Redist A                %10zu    %10zu    %11zu\n", cs_min[0], cs_max[0], cs_sum[0]);
+        printf("Allgatherv A            %10zu    %10zu    %11zu\n", cs_min[1], cs_max[1], cs_sum[1]);
+        printf("Redist B                %10zu    %10zu    %11zu\n", cs_min[2], cs_max[2], cs_sum[2]);
+        printf("Alltoallv B             %10zu    %10zu    %11zu\n", cs_min[3], cs_max[3], cs_sum[3]);
+        printf("Alltoallv B necessary   %10zu    %10zu    %11zu\n", cs_min[4], cs_max[4], cs_sum[4]);
         printf("----------------------------------------------------------------\n");
         printf("\n");
         fflush(stdout);

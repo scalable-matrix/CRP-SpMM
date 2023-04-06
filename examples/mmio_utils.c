@@ -12,8 +12,8 @@ int mm_read_sparse_RPI_GS(const char *fname, int *nrow_, int *ncol_, int *nnz_, 
     FILE *f;
     MM_typecode matcode;
     int i, nrow, ncol, nnz, valid_type, idx, ival;
-    int *row, *col;
-    double *val;
+    int *row = NULL, *col = NULL;
+    double *val = NULL;
  
     if ((f = fopen(fname, "r")) == NULL) return -1;
  

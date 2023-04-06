@@ -334,7 +334,7 @@ void mat_redist_engine_exec(
         int local_srow  = i_send_srow - src_srow;
         int local_scol  = i_send_scol - src_scol;
         const char *i_send_src = src_blk_ + dt_size * (local_srow * src_ld + local_scol);
-        char *i_send_buf;
+        char *i_send_buf = NULL;
         if (dev_type == DEV_TYPE_HOST)
             i_send_buf = sendbuf_h + dt_size * send_displs[isend];
         #ifdef USE_CUDA
@@ -402,7 +402,7 @@ void mat_redist_engine_exec(
         int local_srow  = i_recv_srow - req_srow;
         int local_scol  = i_recv_scol - req_scol;
         char *i_recv_dst = dst_blk_ + dt_size * (local_srow * dst_ld + local_scol);
-        char *i_recv_buf;
+        char *i_recv_buf = NULL;
         if (dev_type == DEV_TYPE_HOST)
             i_recv_buf = recvbuf_h + dt_size * recv_displs[irecv];
         #ifdef USE_CUDA

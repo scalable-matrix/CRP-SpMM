@@ -61,7 +61,7 @@ test_crpspmm.exe: mmio.c.o mmio_utils.c.o test_crpspmm.c.o $(CRPSPMM_INSTALL_DIR
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 crpspmm_calc_partition.exe: mmio.c.o mmio_utils.c.o crpspmm_calc_partition.c.o 
-	$(CC) $(LDFLAGS) -o $@ $^ 
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 clean:
 	rm -f $(EXES) $(C_OBJS)
