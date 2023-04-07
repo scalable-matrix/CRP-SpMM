@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH --job-name=SpMM
+#SBATCH --account=gts-echow7-coda20
+#SBATCH --nodes=32
+#SBATCH --ntasks-per-node=2
+#SBATCH --cpus-per-task=12
+#SBATCH --mem-per-cpu=7G
+#SBATCH --time=00:30:00
+
+cd $SLURM_SUBMIT_DIR
+
+export OMP_PLACES=cores
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+if [ $SLURM_CPUS_PER_TASK -gt 1 ]
+then
+    echo Set MV2 ENV for SLURM_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
+    export MV2_CPU_BINDING_POLICY=hybrid
+    export MV2_THREADS_PER_PROCESS=$SLURM_CPUS_PER_TASK
+    export MV2_USE_THREAD_WARNING=0
+fi
+
+N=256
+NTEST=1
+CHKRES=0
+MATS=("mats/amazon.mtx" "mats/com-Orkut.mtx" "mats/nm7.mtx" "mats/cage15.mtx" "mats/reordered-cage15.mtx")
+
+for MAT in ${MATS[*]};
+do
+    printf "========== Test Matrix: $MAT, Matrix B columns: $N ==========\n"
+    srun ./crpspmm-cpu       $MAT $N $NTEST $CHKRES 
+    srun ./combblas-spmm-cpu $MAT $N $NTEST 2  # 2D   C-stationary algorithm
+done
