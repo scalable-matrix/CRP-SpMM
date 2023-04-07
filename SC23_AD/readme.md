@@ -2,22 +2,30 @@ This file descripts the operations for reproducing all results in "Section V. Nu
 
 ## Preparation
 
-This directory contains two children folders: `job_scripts` and `figures`. Directory `job_scripts` contains all SLURM and shell scripts for reproducing all test results. Directory `figures` contains all MATLAB scripts for plotting the figures. All these MATLAB scripts work with MATLAB R2020a.
+This directory contains two children folders: `scripts` and `figures`. Directory `scripts` contains all SLURM and shell scripts for reproducing all test results. Directory `figures` contains all MATLAB scripts for plotting the figures. All these MATLAB scripts work with MATLAB R2020a.
 
 Create a working directory, for example, `$HOME/SpMM-tests`. Copy files in this directory to `$WORKDIR` and create a `mats` directory for mtx files:
 ```shell
 export WORKDIR=$HOME/SpMM-tests
 mkdir -p $WORKDIR/mats
-cp -r CRP-SpMM/SC23_AD/figures        $WORKDIR/
-cp    CRP-SpMM/SC23_AD/job_scripts/*  $WORKDIR/
+cp -r CRP-SpMM/SC23_AD/figures    $WORKDIR/
+cp    CRP-SpMM/SC23_AD/scripts/*  $WORKDIR/
 ```
 
-Here are the download links for the mtx files we will use and the file name in `$WORKDIR/mats`:
-* com-Orkut: [https://portal.nersc.gov/project/m1982/GNN/unused/com-Orkut-permuted.mtx](https://portal.nersc.gov/project/m1982/GNN/unused/com-Orkut-permuted.mtx), renamed as `$WORKDIR/mats/com-Orkut.mtx`;
-* nm7: [https://portal.nersc.gov/project/m1982/GNN/unused/Nm7.mtx](https://portal.nersc.gov/project/m1982/GNN/unused/Nm7.mtx), renamed as `$WORKDIR/mats/nm7.mtx`;
-* cage15: [https://suitesparse-collection-website.herokuapp.com/MM/vanHeukelum/cage15.tar.gz](https://suitesparse-collection-website.herokuapp.com/MM/vanHeukelum/cage15.tar.gz), extracted and moved to `$WORKDIR/mats/cage15.mtx`;
-* Amazon: [https://portal.nersc.gov/project/m1982/GNN/amazon_large_randomized.mtx](https://portal.nersc.gov/project/m1982/GNN/amazon_large_randomized.mtx), renamed as `$WORKDIR/mats/amazon.mtx`.
-
+Download all mtx files we need:
+```shell
+# com-Orkut
+wget -O $WORKDIR/mats/com-Orkut.mtx https://portal.nersc.gov/project/m1982/GNN/unused/com-Orkut-permuted.mtx
+# nm7
+wget -O $WORKDIR/mats/nm7.mtx https://portal.nersc.gov/project/m1982/GNN/unused/Nm7.mtx
+# Amazon
+wget -O $WORKDIR/mats/amazon.mtx https://portal.nersc.gov/project/m1982/GNN/amazon_large_randomized.mtx
+# cage15
+wget https://suitesparse-collection-website.herokuapp.com/MM/vanHeukelum/cage15.tar.gz
+tar xf cage15.tar.gz
+mv cage15/cage15.mtx $WORKDIR/mats/
+rm -r cage15/
+```
 
 ## Figure 2
 
