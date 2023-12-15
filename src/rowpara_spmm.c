@@ -188,16 +188,20 @@ void rp_spmm_exec(
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < rB_send_nrow; i++)
             {
-                const double *src = B + rB_sridxs_i[i] * ldB;
-                double *dst = rB_sendbuf_i + i * glb_n;
+                size_t src_offset = (size_t) rB_sridxs_i[i] * (size_t) ldB;
+                size_t dst_offset = (size_t) i * (size_t) glb_n;
+                const double *src = B + src_offset;
+                double *dst = rB_sendbuf_i + dst_offset;
                 memcpy(dst, src, sizeof(double) * glb_n);
             }
         } else {
             #pragma omp parallel for schedule(static)
             for (int j = 0; j < glb_n; j++)
             {
-                const double *src_j = B + j * ldB;
-                double *dst_j = rB_sendbuf_i + j * rB_send_nrow;
+                size_t src_offset = (size_t) j * (size_t) ldB;
+                size_t dst_offset = (size_t) j * (size_t) rB_send_nrow;
+                const double *src_j = B + src_offset;
+                double *dst_j = rB_sendbuf_i + dst_offset;
                 for (int i = 0; i < rB_send_nrow; i++)
                     dst_j[i] = src_j[rB_sridxs_i[i]];
             }
@@ -223,7 +227,6 @@ void rp_spmm_exec(
     et = get_wtime_sec();
     rp_spmm->t_a2a += et - st;
     st = get_wtime_sec();
-    memset(rB, 0, sizeof(double) * rB_nrow * glb_n);
     for (int iproc = 0; iproc < nproc; iproc++)
     {
         int *rB_rridxs_i = rB_rridxs + rB_rdispls[iproc] / glb_n;
@@ -234,16 +237,20 @@ void rp_spmm_exec(
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < rB_recv_nrow; i++)
             {
-                double *src = rB_recvbuf_i + i * glb_n;
-                double *dst = rB + rB_rridxs_i[i] * glb_n;
+                size_t src_offset = (size_t) i * (size_t) glb_n;
+                size_t dst_offset = (size_t) rB_rridxs_i[i] * (size_t) glb_n;
+                double *src = rB_recvbuf_i + src_offset;
+                double *dst = rB + dst_offset;
                 memcpy(dst, src, sizeof(double) * glb_n);
             }
         } else {
             #pragma omp parallel for schedule(static)
             for (int j = 0; j < glb_n; j++)
             {
-                double *src_j = rB_recvbuf_i + j * rB_recv_nrow;
-                double *dst_j = rB + j * rB_nrow;
+                size_t src_offset = (size_t) j * (size_t) rB_recv_nrow;
+                size_t dst_offset = (size_t) j * (size_t) rB_nrow;
+                double *src_j = rB_recvbuf_i + src_offset;
+                double *dst_j = rB + dst_offset;
                 for (int i = 0; i < rB_recv_nrow; i++)
                     dst_j[rB_rridxs_i[i]] = src_j[i];
             }

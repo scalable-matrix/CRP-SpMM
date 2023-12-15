@@ -159,7 +159,7 @@ int main(int argc, char **argv)
         {
             int glb_i = loc_B_srow + i;
             for (int j = 0; j < glb_n; j++)
-                loc_B[i * loc_B_ld + j] = glb_i * 1.0 + j * 0.01;
+                loc_B[i * loc_B_ld + j] = glb_i * 0.19 + j * 0.24;
         }
     } else {
         // Column major
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < loc_B_nrow; i++)
             {
                 int glb_i = loc_B_srow + i;
-                loc_B[i + j * loc_B_ld] = glb_i * 1.0 + j * 0.01;
+                loc_B[i + j * loc_B_ld] = glb_i * 0.19 + j * 0.24;
             }
         }
     }
@@ -233,8 +233,11 @@ int main(int argc, char **argv)
         if (my_rank == 0)
         {
             for (int i = 0; i < glb_k; i++)
+            {
+                double *glb_Bi = glb_B + (size_t) i * (size_t) glb_n;
                 for (int j = 0; j < glb_n; j++)
-                    glb_B[i * glb_n + j] = i * 1.0 + j * 0.01;
+                    glb_Bi[j] = i * 0.19 + j * 0.24;
+            }
 
             #ifdef USE_MKL
             double alpha = 1.0, beta = 0.0;
