@@ -9,9 +9,8 @@ struct rowpara_spmm
 {
     int    nproc, my_rank;      // Number of processes and rank of this process in comm
     int    glb_n;               // Global number of columns of B and C
-    int    A_srow, A_nrow;      // Starting row and number of rows of local A
-    int    B_srow, B_nrow;      // Starting row and number of rows of local B
-    int    rB_srow, rB_nrow;    // Starting row and number of rows of local redist B
+    int    A_nrow;              // Number of rows of local A
+    int    rB_nrow;             // Number of rows of local redist B
     int    *A_rowptr;           // Size A_nrow + 1, local A matrix CSR row pointer
     int    *A_colidx;           // Size A_nnz, local A matrix CSR column index
     int    *rB_scnts;           // Size nproc, send counts of redist B matrix

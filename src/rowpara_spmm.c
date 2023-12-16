@@ -33,10 +33,7 @@ void rp_spmm_init(
     MPI_Comm_rank(comm, &my_rank);
     rp_spmm_->nproc   = nproc;
     rp_spmm_->my_rank = my_rank;
-    rp_spmm_->A_srow = A_srow;
     rp_spmm_->A_nrow  = A_nrow;
-    rp_spmm_->B_srow  = B_row_displs[my_rank];
-    rp_spmm_->B_nrow  = B_row_displs[my_rank + 1] - rp_spmm_->B_srow;
     rp_spmm_->glb_n   = glb_n;
     rp_spmm_->comm    = comm;
 
@@ -72,7 +69,6 @@ void rp_spmm_init(
     rp_spmm_->A_rowptr = A1_rowptr;
     rp_spmm_->A_colidx = A1_colidx;
     rp_spmm_->A_val    = A1_val;
-    rp_spmm_->rB_srow  = rB_srow;
     rp_spmm_->rB_nrow  = rB_erow - rB_srow + 1;
 
     // 2. Find the rows of B that are needed by A on each process
@@ -124,10 +120,8 @@ void rp_spmm_init(
     rp_spmm_->rB_sridxs  = rB_sridxs;
 
     // 4. Some post-processing of counts and indices
-    for (int i = 0; i < rB_rdispls[nproc]; i++)
-        rB_rridxs[i] -= rp_spmm_->rB_srow;
-    for (int i = 0; i < rB_sdispls[nproc]; i++)
-        rB_sridxs[i] -= B_row_displs[my_rank];
+    for (int i = 0; i < rB_rdispls[nproc]; i++) rB_rridxs[i] -= rB_srow;
+    for (int i = 0; i < rB_sdispls[nproc]; i++) rB_sridxs[i] -= B_row_displs[my_rank];
     for (int iproc = 0; iproc < nproc; iproc++)
     {
         rB_rcnts[iproc]   *= glb_n;
@@ -202,6 +196,7 @@ void rp_spmm_exec(
                 size_t dst_offset = (size_t) j * (size_t) rB_send_nrow;
                 const double *src_j = B + src_offset;
                 double *dst_j = rB_sendbuf_i + dst_offset;
+                #pragma omp simd
                 for (int i = 0; i < rB_send_nrow; i++)
                     dst_j[i] = src_j[rB_sridxs_i[i]];
             }
@@ -251,6 +246,7 @@ void rp_spmm_exec(
                 size_t dst_offset = (size_t) j * (size_t) rB_nrow;
                 double *src_j = rB_recvbuf_i + src_offset;
                 double *dst_j = rB + dst_offset;
+                #pragma omp simd
                 for (int i = 0; i < rB_recv_nrow; i++)
                     dst_j[rB_rridxs_i[i]] = src_j[i];
             }
