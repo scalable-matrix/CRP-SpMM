@@ -69,6 +69,7 @@ void para2d_spmm_init(
         loc_A_rdispls[i + 1] = loc_A_rdispls[i] + loc_A_rcnts[i];
     }
     int loc_A_nnz = loc_A_rdispls[pn];
+    loc_A_rowptr[loc_A_nrow] = loc_A_rowptr[0] + loc_A_nnz;
     int    *loc_A_colidx = (int *)    malloc(sizeof(int)    * loc_A_nnz);
     double *loc_A_val    = (double *) malloc(sizeof(double) * loc_A_nnz);
     MPI_Allgatherv(A_colidx, A0_nnz, MPI_INT,    loc_A_colidx, loc_A_rcnts, loc_A_rdispls, MPI_INT,    comm_row);
@@ -145,6 +146,7 @@ void para2d_spmm_print_stat(para2d_spmm_p para2d_spmm)
         t_max[i] = t_max[i] / n_exec;
         t_avg[i] = t_avg[i] / (n_exec * glb_nproc);
     }
+    t_avg[1] /= glb_nproc;
     if (glb_rank == 0)
     {
         printf("para2d_spmm_init() time = %.2f s\n", t_max[0]);

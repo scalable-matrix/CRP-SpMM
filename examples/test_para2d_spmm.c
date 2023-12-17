@@ -1,21 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
-#include <omp.h>
-#include <mpi.h>
-
-#ifdef USE_MKL
-#include <mkl.h>
-#endif
-
-#include "utils.h"
-#include "mmio_utils.h"
+#include "test_utils.h"
 #include "para2d_spmm.h"
 #include "spmat_part.h"
 #include "mat_redist.h"
-#include "test_utils.h"
 
 int main(int argc, char **argv) 
 {
@@ -45,6 +31,7 @@ int main(int argc, char **argv)
     MPI_Bcast(&glb_mk[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
     glb_m = glb_mk[0];
     glb_k = glb_mk[1];
+    if (chk_res) chk_res = can_check_res(my_rank, glb_m, glb_n, glb_k);
 
     // 2. Rank 0 compute 2D process grid and broadcast
     int pm = 0, pn = 0;
@@ -62,7 +49,6 @@ int main(int argc, char **argv)
         printf("2D process grid: pm, pn = %d, %d\n", pm, pn);
     }
     int pmn[2] = {pm, pn};
-    int pi = my_rank / pn, pj = my_rank % pn;
     MPI_Bcast(&pmn[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
     if (my_rank != 0)
     {
@@ -72,6 +58,7 @@ int main(int argc, char **argv)
         AC_rowptr = (int *) malloc(sizeof(int) * (pm + 1));
         BC_colptr = (int *) malloc(sizeof(int) * (pn + 1));
     }
+    int pi = my_rank / pn, pj = my_rank % pn;
     MPI_Bcast(A0_rowptr, nproc + 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(B_rowptr,  pm + 1,    MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(AC_rowptr, pm + 1,    MPI_INT, 0, MPI_COMM_WORLD);
@@ -84,10 +71,16 @@ int main(int argc, char **argv)
     int *A_nnz_scnts  = (int *) malloc(sizeof(int) * nproc);
     int *loc_A_rowptr = NULL, *loc_A_colidx = NULL;
     double *loc_A_csrval = NULL;
+    if (my_rank == 0)
+    {
+        for (int i = 0; i <= nproc; i++)
+            A_nnz_displs[i] = glb_A_rowptr[A0_rowptr[i]];
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
     scatter_csr_rows(
-        nproc, my_rank, A0_rowptr, A_nnz_displs, A_m_scnts, 
+        MPI_COMM_WORLD, nproc, my_rank, A0_rowptr, A_nnz_displs, A_m_scnts, 
         A_nnz_scnts, glb_A_rowptr, glb_A_colidx, glb_A_csrval,
-        &loc_A_rowptr, &loc_A_colidx, &loc_A_csrval
+        &loc_A_rowptr, &loc_A_colidx, &loc_A_csrval, 0
     );
     int loc_A_srow = A0_rowptr[my_rank];
     int loc_A_nrow = A0_rowptr[my_rank + 1] - loc_A_srow;
@@ -155,7 +148,7 @@ int main(int argc, char **argv)
         double *sbuf = (double *) malloc(sizeof(double) * loc_C_nrow * loc_BC_ncol);
         if (layout == 0)
         {
-            memcpy(sbuf, loc_C, sizeof(double) * loc_C_nrow * glb_n);
+            memcpy(sbuf, loc_C, sizeof(double) * loc_C_nrow * loc_BC_ncol);
         } else {
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < loc_C_nrow; i++)

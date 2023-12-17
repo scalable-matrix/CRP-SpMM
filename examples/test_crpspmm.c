@@ -1,23 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
-#include <omp.h>
-#include <mpi.h>
-
-#ifdef USE_MKL
-#include <mkl.h>
-#endif
-#ifdef USE_CUDA
-#include "cuda_proxy.h"
-#endif
-
-#include "utils.h"
-#include "mmio_utils.h"
+#include "test_utils.h"
 #include "crpspmm.h"
 #include "spmat_part.h"
-#include "test_utils.h"
 
 int main(int argc, char **argv) 
 {
@@ -56,6 +39,7 @@ int main(int argc, char **argv)
     MPI_Bcast(&glb_mk[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
     glb_m = glb_mk[0];
     glb_k = glb_mk[1];
+    if (chk_res) chk_res = can_check_res(my_rank, glb_m, glb_n, glb_k);
 
     // 2. 1D partition and distribute A s.t. each process has a contiguous  
     //    block of rows and nearly the same number of nonzeros
@@ -73,9 +57,9 @@ int main(int argc, char **argv)
     int *loc_A_rowptr = NULL, *loc_A_colidx = NULL;
     double *loc_A_csrval = NULL;
     scatter_csr_rows(
-        nproc, my_rank, A_m_displs, A_nnz_displs, A_m_scnts, 
+        MPI_COMM_WORLD, nproc, my_rank, A_m_displs, A_nnz_displs, A_m_scnts, 
         A_nnz_scnts, glb_A_rowptr, glb_A_colidx, glb_A_csrval,
-        &loc_A_rowptr, &loc_A_colidx, &loc_A_csrval
+        &loc_A_rowptr, &loc_A_colidx, &loc_A_csrval, 0
     );
     int loc_A_srow = A_m_displs[my_rank];
     int loc_A_nrow = A_m_displs[my_rank + 1] - loc_A_srow;

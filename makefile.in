@@ -1,0 +1,7 @@
+CC  = mpiicc
+CXX = mpiicpc
+
+USE_MKL = 1
+
+USE_OPENBLAS = 0
+OPENBLAS_INSTALL_DIR = ../../OpenBLAS-git/install

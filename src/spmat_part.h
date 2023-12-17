@@ -1,6 +1,9 @@
 #ifndef __SPMAT_PART_H__
 #define __SPMAT_PART_H__
 
+#include <stddef.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

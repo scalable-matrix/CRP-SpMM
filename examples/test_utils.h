@@ -1,14 +1,42 @@
 #ifndef __TEST_UTILS_H__
 #define __TEST_UTILS_H__
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <limits.h>
+
 #include <omp.h>
 #include <mpi.h>
+
 #include "mmio_utils.h"
+#include "utils.h"
 
 #ifdef USE_MKL
 #include <mkl.h>
 #endif
+#ifdef USE_CUDA
+#include "cuda_proxy.h"
+#endif
+
+static int can_check_res(int my_rank, int m, int n, int k)
+{
+    int max_n1 = INT_MAX / m;
+    int max_n2 = INT_MAX / k;
+    int chk_res = 1;
+    if ((n > max_n1) || (n > max_n2))
+    {
+        if (my_rank == 0) 
+        {
+            printf("The complete B or C matrix is too large to be stored in a dense matrix\n");
+            printf("Result validation check will be skipped\n");
+            fflush(stdout);
+        }
+        chk_res = 0;
+    }
+    return chk_res;
+}
 
 static void read_mtx_csr(
     const char *fname, int *glb_m, int *glb_k, int glb_n, 
@@ -47,14 +75,14 @@ static void read_mtx_csr(
 }
 
 static void scatter_csr_rows(
-    int nproc, int my_rank, int *A_m_displs, int *A_nnz_displs, int *A_m_scnts, 
+    MPI_Comm comm, int nproc, int my_rank, int *A_m_displs, int *A_nnz_displs, int *A_m_scnts, 
     int *A_nnz_scnts, int *glb_A_rowptr, int *glb_A_colidx, double *glb_A_csrval, 
-    int **loc_A_rowptr_, int **loc_A_colidx_, double **loc_A_csrval_
+    int **loc_A_rowptr_, int **loc_A_colidx_, double **loc_A_csrval_, int dbg_print
 )
 {
     MPI_Request reqs[3];
-    MPI_Ibcast(A_m_displs,   nproc + 1, MPI_INT, 0, MPI_COMM_WORLD, &reqs[0]);
-    MPI_Ibcast(A_nnz_displs, nproc + 1, MPI_INT, 0, MPI_COMM_WORLD, &reqs[1]);
+    MPI_Ibcast(A_m_displs,   nproc + 1, MPI_INT, 0, comm, &reqs[0]);
+    MPI_Ibcast(A_nnz_displs, nproc + 1, MPI_INT, 0, comm, &reqs[1]);
     MPI_Waitall(2, &reqs[0], MPI_STATUSES_IGNORE);
     for (int i = 0; i < nproc; i++)
     {
@@ -69,22 +97,45 @@ static void scatter_csr_rows(
     double *loc_A_csrval = (double *) malloc(sizeof(double) * loc_A_nnz);
     MPI_Iscatterv(
         glb_A_rowptr, A_m_scnts, A_m_displs, MPI_INT, 
-        loc_A_rowptr, loc_A_nrow, MPI_INT, 0, MPI_COMM_WORLD, &reqs[0]
+        loc_A_rowptr, loc_A_nrow, MPI_INT, 0, comm, &reqs[0]
     );
     MPI_Iscatterv(
         glb_A_colidx, A_nnz_scnts, A_nnz_displs, MPI_INT, 
-        loc_A_colidx, loc_A_nnz, MPI_INT, 0, MPI_COMM_WORLD, &reqs[1]
+        loc_A_colidx, loc_A_nnz, MPI_INT, 0, comm, &reqs[1]
     );
     MPI_Iscatterv(
         glb_A_csrval, A_nnz_scnts, A_nnz_displs, MPI_DOUBLE, 
-        loc_A_csrval, loc_A_nnz, MPI_DOUBLE, 0, MPI_COMM_WORLD, &reqs[2]
+        loc_A_csrval, loc_A_nnz, MPI_DOUBLE, 0, comm, &reqs[2]
     );
     MPI_Waitall(3, &reqs[0], MPI_STATUSES_IGNORE);
     loc_A_rowptr[loc_A_nrow] = A_nnz_displs[my_rank + 1];
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(comm);
     *loc_A_rowptr_ = loc_A_rowptr;
     *loc_A_colidx_ = loc_A_colidx;
     *loc_A_csrval_ = loc_A_csrval;
+
+    if (!dbg_print) return;
+    for (int iproc = 0; iproc < nproc; iproc++)
+    {
+        if (my_rank == iproc)
+        {
+            printf("\nRank %d: loc_A_srow, loc_A_nrow = %d, %d\n", my_rank, loc_A_srow, loc_A_nrow);
+            printf("loc_A_rowptr = ");
+            for (int i = 0; i <= loc_A_nrow; i++)
+                printf("%d ", loc_A_rowptr[i]);
+            printf("\n");
+            printf("loc_A_colidx = ");
+            for (int i = 0; i < loc_A_nnz; i++)
+                printf("%d ", loc_A_colidx[i]);
+            printf("\n");
+            printf("loc_A_csrval = ");
+            for (int i = 0; i < loc_A_nnz; i++)
+                printf("%.2f ", loc_A_csrval[i]);
+            printf("\n");
+            fflush(stdout);
+        }
+        MPI_Barrier(comm);
+    }
 }
 
 static void fill_B(
