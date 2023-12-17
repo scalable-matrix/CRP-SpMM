@@ -142,6 +142,7 @@ void rp_spmm_init(
 void rp_spmm_free(rp_spmm_p *rp_spmm)
 {
     rp_spmm_p rp_spmm_ = *rp_spmm;
+    if (rp_spmm_ == NULL) return;
     free(rp_spmm_->A_rowptr);
     free(rp_spmm_->A_colidx);
     free(rp_spmm_->A_val);
@@ -161,9 +162,11 @@ void rp_spmm_exec(
     double *C, const int ldC
 )
 {
+    if (rp_spmm == NULL) return;
     int nproc = rp_spmm->nproc;
     int glb_n = rp_spmm->glb_n;
     double st, et;
+    double exec_s = get_wtime_sec();
     
     // 1. Pack B send buffer for redistribution
     int *rB_scnts   = rp_spmm->rB_scnts;
@@ -283,11 +286,14 @@ void rp_spmm_exec(
     #endif
     et = get_wtime_sec();
     rp_spmm->t_spmm += et - st;
-    rp_spmm->n_exec++;
 
     free(rB_sendbuf);
     free(rB_recvbuf);
     free(rB);
+
+    double exec_e = get_wtime_sec();
+    rp_spmm->t_exec += exec_e - exec_s;
+    rp_spmm->n_exec++;
 }
 
 // Print statistic info of rp_spmm_p
@@ -295,35 +301,37 @@ void rp_spmm_print_stat(rp_spmm_p rp_spmm)
 {
     if (rp_spmm == NULL) return;
     int my_rank = rp_spmm->my_rank;
-    if (my_rank == 0) printf("rp_spmm init time: %.3f s\n", rp_spmm->t_init);
-    int n_exec = rp_spmm->n_exec;
+    int n_exec  = rp_spmm->n_exec;
     if (n_exec == 0) return;
-    size_t rB_recv_max = 0, rB_recv_total = 0;
-    double t_raw[5], t_max[5], t_avg[5];
+    size_t rB_recv_max = 0, rB_recv_sum = 0;
+    double t_raw[6], t_max[6], t_avg[6];
     t_raw[0] = rp_spmm->t_init;
     t_raw[1] = rp_spmm->t_pack;
     t_raw[2] = rp_spmm->t_a2a;
     t_raw[3] = rp_spmm->t_unpack;
     t_raw[4] = rp_spmm->t_spmm;
-    MPI_Reduce(&rp_spmm->rB_recv_size, &rB_recv_max,   1, MPI_UNSIGNED_LONG_LONG, MPI_MAX, 0, rp_spmm->comm);
-    MPI_Reduce(&rp_spmm->rB_recv_size, &rB_recv_total, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, 0, rp_spmm->comm);
-    MPI_Reduce(&t_raw[0], &t_max[0], 5, MPI_DOUBLE, MPI_MAX, 0, rp_spmm->comm);
-    MPI_Reduce(&t_raw[0], &t_avg[0], 5, MPI_DOUBLE, MPI_SUM, 0, rp_spmm->comm);
-    for (int i = 0; i < 5; i++)
+    t_raw[5] = rp_spmm->t_exec;
+    MPI_Reduce(&rp_spmm->rB_recv_size, &rB_recv_max, 1, MPI_UNSIGNED_LONG_LONG, MPI_MAX, 0, rp_spmm->comm);
+    MPI_Reduce(&rp_spmm->rB_recv_size, &rB_recv_sum, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, 0, rp_spmm->comm);
+    MPI_Reduce(&t_raw[0], &t_max[0], 6, MPI_DOUBLE, MPI_MAX, 0, rp_spmm->comm);
+    MPI_Reduce(&t_raw[0], &t_avg[0], 6, MPI_DOUBLE, MPI_SUM, 0, rp_spmm->comm);
+    for (int i = 1; i <= 5; i++)
     {
         t_max[i] = t_max[i] / n_exec;
         t_avg[i] = t_avg[i] / (n_exec * rp_spmm->nproc);
     }
     if (my_rank == 0)
     {
-        printf("B matrix receive rows (elements) max, total = %zu, %zu", rB_recv_max, rB_recv_total);
-        printf(" (%zu, %zu)\n", rB_recv_max * rp_spmm->glb_n, rB_recv_total * rp_spmm->glb_n);
+        printf("rp_spmm_init() time = %.2f s\n", t_max[0]);
+        printf("B matrix receive rows (elements) max, total = %zu, %zu", rB_recv_max, rB_recv_sum);
+        printf(" (%zu, %zu)\n", rB_recv_max * rp_spmm->glb_n, rB_recv_sum * rp_spmm->glb_n);
         printf("-------------------- Runtime (s) --------------------\n");
         printf("                                     avg         max\n");
         printf("Pack B matrix for redistribution  %6.3f      %6.3f\n", t_avg[1], t_max[1]);
         printf("Redistribute B matrix             %6.3f      %6.3f\n", t_avg[2], t_max[2]);
         printf("Unpack received B matrix data     %6.3f      %6.3f\n", t_avg[3], t_max[3]);
         printf("Local SpMM                        %6.3f      %6.3f\n", t_avg[4], t_max[4]);
+        printf("Total rp_spmm_exec()              %6.3f      %6.3f\n", t_avg[5], t_max[5]);
         printf("\n");
         fflush(stdout);
     }
@@ -332,10 +340,11 @@ void rp_spmm_print_stat(rp_spmm_p rp_spmm)
 // Clear statistic info of rp_spmm_p
 void rp_spmm_clear_stat(rp_spmm_p rp_spmm)
 {
+    if (rp_spmm == NULL) return;
     rp_spmm->n_exec   = 0;
-    rp_spmm->t_init   = 0.0;
     rp_spmm->t_pack   = 0.0;
     rp_spmm->t_a2a    = 0.0;
     rp_spmm->t_unpack = 0.0;
     rp_spmm->t_spmm   = 0.0;
+    rp_spmm->t_exec   = 0.0;
 }

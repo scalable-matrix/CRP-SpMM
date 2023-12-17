@@ -6,6 +6,7 @@
 
 #include "mmio_utils.h"
 #include "spmat_part.h"
+#include "utils.h"
 
 int main(int argc, char **argv) 
 {
@@ -34,12 +35,15 @@ int main(int argc, char **argv)
     int pm = 0, pn = 0;
     size_t comm_cost = 0;
     int *A0_rowptr = NULL, *B_rowptr = NULL, *AC_rowptr = NULL, *BC_colptr = NULL;
+    double st = get_wtime_sec();
     calc_spmm_2dpg(
         np, m, n, k, rowptr, colidx, &pm, &pn, &comm_cost, 
         &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, 1
     );
+    double et = get_wtime_sec();
 
     printf("============================================================\n");
+    printf("Calculate partitioning time = %.2f s\n", et - st);
     printf("Calculated 2D grid: pm, pn = %d, %d, comm cost = %zu\n\n", pm, pn, comm_cost);
 
     printf("1D row partitioning of A:\n");
@@ -51,7 +55,7 @@ int main(int argc, char **argv)
             printf("Rank %3d: [%d, %d]\n", rank, A0_rowptr[rank], A0_rowptr[rank + 1] - 1);
         }
         int rank_s = i * pn, rank_e = (i + 1) * pn - 1;
-        printf("Ranks [%d, %d] own A rows [%d, %d]\n", rank_s, rank_e, A0_rowptr[rank_s], A0_rowptr[rank_e + 1] - 1);
+        printf("Ranks [%d, %d] all own A rows [%d, %d] after replicating A\n", rank_s, rank_e, A0_rowptr[rank_s], A0_rowptr[rank_e + 1] - 1);
     }
     printf("\n");
 

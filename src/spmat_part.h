@@ -47,7 +47,7 @@ void csr_mat_row_part_comm_size(
 //   *AC_rowptr : Size pm + 1, row pointer of replicated A and final C
 //   *BC_colptr : Size pn + 1, column pointer of B and C
 // Notes: 
-//   let idx_m0(i) = [A0_rowptr[i] : A0_rowptr[i+1] - 1],
+//   Let idx_m0(i) = [A0_rowptr[i] : A0_rowptr[i+1] - 1],
 //       idx_m(i)  = [AC_rowptr[i] : AC_rowptr[i+1] - 1], 
 //       idx_k(i)  = [B_rowptr[i]  : B_rowptr[i+1] - 1],
 //       idx_n(j)  = [BC_colptr[j] : BC_colptr[j+1] - 1].

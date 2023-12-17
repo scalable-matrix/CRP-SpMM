@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <omp.h>
 
 #include "mmio_utils.h"
 
@@ -46,6 +47,8 @@ int main(int argc, char **argv)
     }
     printf("A size = %d * %d, nnz = %d, nnz/row = %d, bandwidth = %d\n\n", m, k, nnz, nnz / m, bw);
     coo2csr(m, k, nnz, row, col, val, &rowptr, &colidx, &csrval);
+
+    double st = omp_get_wtime();
 
     // For CSR with <int32_t> indices and <double> values, the average memory cost
     // per nonzero is 12.x bytes, which is 1.5x times of sizeof(double)
@@ -111,6 +114,9 @@ int main(int argc, char **argv)
             printf("Split N, current m_split = %d, n_split = %d\n\n", m_split, n_split);
         }
     }  // End of i loop
+
+    double et = omp_get_wtime();
+    printf("Calculate partitioning time = %.2f s\n", et - st);
 
     free(fac);
     free(row);

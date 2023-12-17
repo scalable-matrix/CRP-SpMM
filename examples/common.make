@@ -46,7 +46,8 @@ endif
 
 C_SRCS 	= $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
-EXES    = test_crpspmm.exe crpspmm_calc_partition.exe test_rp_spmm.exe test_spmm_2dpg.exe
+EXES    = test_crpspmm.exe crpspmm_calc_partition.exe test_rp_spmm.exe test_spmm_2dpg.exe \
+          test_para2d_spmm.exe
 # Delete the default old-fashion double-suffix rules
 .SUFFIXES:
 
@@ -67,6 +68,9 @@ test_rp_spmm.exe: mmio.c.o mmio_utils.c.o test_rp_spmm.c.o $(CRPSPMM_INSTALL_DIR
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 test_spmm_2dpg.exe: mmio.c.o mmio_utils.c.o test_spmm_2dpg.c.o $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
+
+test_para2d_spmm.exe: mmio.c.o mmio_utils.c.o test_para2d_spmm.c.o $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 clean:
