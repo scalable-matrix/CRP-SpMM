@@ -11,8 +11,12 @@ struct rowpara_spmm
     int    glb_n;               // Global number of columns of B and C
     int    A_nrow;              // Number of rows of local A
     int    rB_nrow;             // Number of rows of local redist B
+    int    rB_self_src_offset;  // Redist B self-to-self source offset
+    int    rB_self_dst_offset;  // Redist B self-to-self destination offset
+    int    rB_self_nrow;        // Redist B self-to-self number of rows
     int    *A_rowptr;           // Size A_nrow + 1, local A matrix CSR row pointer
     int    *A_colidx;           // Size A_nnz, local A matrix CSR column index
+    int    *rB_self_src_ridxs;  // Size rB_self_nrow, redist B self-to-self source row indices
     int    *rB_scnts;           // Size nproc, send counts of redist B matrix
     int    *rB_sridxs;          // Size unknown, send row indices of redist B matrix
     int    *rB_sdispls;         // Size nproc, send buffer displacements of redist B matrix

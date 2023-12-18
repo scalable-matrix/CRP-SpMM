@@ -150,7 +150,7 @@ int main(int argc, char **argv)
             glb_B  = (double *) malloc(sizeof(double) * glb_k * glb_n);
             ref_C  = (double *) malloc(sizeof(double) * glb_m * glb_n);
             recv_C = (double *) malloc(sizeof(double) * glb_m * glb_n);
-            fill_B(layout, glb_B, glb_n, 0, glb_k, 0, glb_n, factor_i, factor_j);
+            fill_B(0, glb_B, glb_n, 0, glb_k, 0, glb_n, factor_i, factor_j);
         }
         int *C_rcnts   = (int *) malloc(sizeof(int) * nproc);
         int *C_rdispls = (int *) malloc(sizeof(int) * (nproc + 1));

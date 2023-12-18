@@ -1,6 +1,6 @@
 // @brief    : Some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2022-01-19
+// @modified : 2023-12-17
 
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
@@ -166,6 +166,8 @@ void copy_matrix(
     const void *src, const int lds, void *dst, const int ldd, const int use_omp
 );
 
+// ========== For debugging ==========
+
 // Print a matrix to standard output
 // Input parameters:
 //   dtype : 0 -> int, 1 -> double
@@ -181,19 +183,8 @@ void print_matrix(
     const int nrow, const int ncol, const char *fmt, const char *name
 );
 
-// Transpose a column-major matrix (OMP parallelized, but not optimized)
-// Input parameters:
-//   nrow : Number of rows of the transposed matrix
-//   ncol : Number of columns of the transposed matrix
-//   A    : Size >= ldA * nrow, column-major source matrix
-//   ldA  : Leading dimension of A, >= ncol
-//   ldAT : Leading dimension of AT, >= nrow
-// Output parameter:
-//   AT   : Size >= ldA * ncol, column-major transposed matrix
-void transpose_cm_mat(
-    const int nrow, const int ncol, const double *A, const int ldA,
-    double *AT, const int ldAT
-);
+// Dump binary to file
+void dump_binary(const char *fname, void *data, const size_t bytes);
 
 #ifdef __cplusplus
 }

@@ -71,7 +71,40 @@ void rp_spmm_init(
     rp_spmm_->A_val    = A1_val;
     rp_spmm_->rB_nrow  = rB_erow - rB_srow + 1;
 
-    // 2. Find the rows of B that are needed by A on each process
+    int rB_recv_nrow = 0;
+    for (int i = 0; i < glb_k; i++) rB_recv_nrow += B_rowflag[i];
+
+    // 2. Find self-to-self copy of B rows
+    int rB_self_nrow = 0, rB_self_src_offset = 0, rB_self_dst_offset = 0;
+    for (int irow = B_row_displs[my_rank]; irow < B_row_displs[my_rank + 1]; irow++)
+    {
+        if (B_rowflag[irow])
+        {
+            rB_self_nrow++;
+            if (rB_self_nrow == 1)
+            {
+                rB_self_src_offset = irow - B_row_displs[my_rank];
+                rB_self_dst_offset = irow - rB_srow;
+            }
+        }
+    }
+    int *rB_self_src_ridxs = (int *) malloc(sizeof(int) * rB_self_nrow);
+    rB_self_nrow = 0;
+    for (int irow = B_row_displs[my_rank]; irow < B_row_displs[my_rank + 1]; irow++)
+    {
+        if (B_rowflag[irow])
+        {
+            rB_self_src_ridxs[rB_self_nrow] = irow;
+            rB_self_nrow++;
+            B_rowflag[irow] = 0;
+        }
+    }
+    rp_spmm_->rB_self_src_offset = rB_self_src_offset;
+    rp_spmm_->rB_self_dst_offset = rB_self_dst_offset;
+    rp_spmm_->rB_self_nrow       = rB_self_nrow;
+    rp_spmm_->rB_self_src_ridxs  = rB_self_src_ridxs;
+
+    // 3. Find the rows of B that are needed by A on each process
     int *rB_rcnts   = (int *) malloc(sizeof(int) * nproc);
     int *rB_rdispls = (int *) malloc(sizeof(int) * (nproc + 1));
     int *rB_rridxs  = (int *) malloc(sizeof(int) * rp_spmm_->rB_nrow);
@@ -103,7 +136,7 @@ void rp_spmm_init(
     int rB_self_size = rB_rcnts[my_rank];
     rp_spmm_->rB_recv_size = (size_t) (rB_rdispls[nproc] - rB_self_size);
 
-    // 3. Get the indices of B rows this process needs to send
+    // 4. Get the indices of B rows this process needs to send
     int *rB_scnts   = (int *) malloc(sizeof(int) * nproc);
     int *rB_sdispls = (int *) malloc(sizeof(int) * (nproc + 1));
     MPI_Alltoall(rB_rcnts, 1, MPI_INT, rB_scnts, 1, MPI_INT, comm);
@@ -119,7 +152,7 @@ void rp_spmm_init(
     rp_spmm_->rB_sdispls = rB_sdispls;
     rp_spmm_->rB_sridxs  = rB_sridxs;
 
-    // 4. Some post-processing of counts and indices
+    // 5. Some post-processing of counts and indices
     for (int i = 0; i < rB_rdispls[nproc]; i++) rB_rridxs[i] -= rB_srow;
     for (int i = 0; i < rB_sdispls[nproc]; i++) rB_sridxs[i] -= B_row_displs[my_rank];
     for (int iproc = 0; iproc < nproc; iproc++)
@@ -146,6 +179,7 @@ void rp_spmm_free(rp_spmm_p *rp_spmm)
     free(rp_spmm_->A_rowptr);
     free(rp_spmm_->A_colidx);
     free(rp_spmm_->A_val);
+    free(rp_spmm_->rB_self_src_ridxs);
     free(rp_spmm_->rB_rcnts);
     free(rp_spmm_->rB_rdispls);
     free(rp_spmm_->rB_rridxs);
@@ -180,6 +214,7 @@ void rp_spmm_exec(
         int *rB_sridxs_i = rB_sridxs + rB_sdispls[iproc] / glb_n;
         int rB_send_nrow = rB_scnts[iproc] / glb_n;
         double *rB_sendbuf_i = rB_sendbuf + rB_sdispls[iproc];
+        if (rB_scnts[iproc] == 0) continue;
         if (BC_layout == 0)
         {
             #pragma omp parallel for schedule(static)
@@ -230,6 +265,7 @@ void rp_spmm_exec(
         int *rB_rridxs_i = rB_rridxs + rB_rdispls[iproc] / glb_n;
         int rB_recv_nrow = rB_rcnts[iproc] / glb_n;
         double *rB_recvbuf_i = rB_recvbuf + rB_rdispls[iproc];
+        if (rB_rcnts[iproc] == 0) continue;
         if (BC_layout == 0)
         {
             #pragma omp parallel for schedule(static)
@@ -258,7 +294,43 @@ void rp_spmm_exec(
     et = get_wtime_sec();
     rp_spmm->t_unpack += et - st;
 
-    // 3. Local SpMM
+    // 3. Copy self-to-self B rows
+    st = get_wtime_sec();
+    int rB_self_src_offset = rp_spmm->rB_self_src_offset;
+    int rB_self_dst_offset = rp_spmm->rB_self_dst_offset;
+    int rB_self_nrow       = rp_spmm->rB_self_nrow;
+    int *rB_self_src_ridxs = rp_spmm->rB_self_src_ridxs;
+    if (BC_layout == 0)
+    {
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < rB_self_nrow; i++)
+        {
+            int row_i   = rB_self_src_ridxs[i] - rB_self_src_ridxs[0];
+            int src_row = rB_self_src_offset + row_i;
+            int dst_row = rB_self_dst_offset + row_i;
+            size_t src_offset = (size_t) src_row * (size_t) ldB;
+            size_t dst_offset = (size_t) dst_row * (size_t) glb_n;
+            const double *src = B + src_offset;
+            double *dst = rB + dst_offset;
+            memcpy(dst, src, sizeof(double) * glb_n);
+        }
+    } else {
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < rB_self_nrow; i++)
+        {
+            int row_i   = rB_self_src_ridxs[i] - rB_self_src_ridxs[0];
+            int src_row = rB_self_src_offset + row_i;
+            int dst_row = rB_self_dst_offset + row_i;
+            const double *src = B + src_row;
+            double *dst = rB + dst_row;
+            for (int j = 0; j < glb_n; j++)
+                dst[j * rB_nrow] = src[j * ldB];
+        }
+    }
+    et = get_wtime_sec();
+    rp_spmm->t_a2a += et - st;
+
+    // 4. Local SpMM
     st = get_wtime_sec();
     #ifdef USE_MKL
     sparse_matrix_t mkl_spA;
