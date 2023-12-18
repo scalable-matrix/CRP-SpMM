@@ -16,13 +16,13 @@ int main(int argc, char **argv)
         return 255;
     }
 
-    int m, n, k, np, nnz, bw = 0;
+    int m, n, k, np, nnz, bw = 0, need_symm = 0;
     int *row, *col, *rowptr, *colidx;
     double *val, *csrval;
     n  = atoi(argv[2]);
     np = atoi(argv[3]);
     printf("Reading matrix A from file %s\n", argv[1]);
-    mm_read_sparse_RPI_GS(argv[1], &m, &k, &nnz, &row, &col, &val);
+    mm_read_sparse_RPI(argv[1], need_symm, &m, &k, &nnz, &row, &col, &val);
     #pragma omp parallel for reduction(max:bw)
     for (int i = 0; i < nnz; i++)
     {

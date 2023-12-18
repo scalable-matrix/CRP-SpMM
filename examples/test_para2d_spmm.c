@@ -15,6 +15,7 @@ int main(int argc, char **argv)
     int n_test = atoi(argv[3]);
     int chk_res = 0;
     if (argc >= 5) chk_res = atoi(argv[4]);
+    int need_symm = 0;
 
     int nproc, my_rank;
     MPI_Init(&argc, &argv);
@@ -26,7 +27,7 @@ int main(int argc, char **argv)
     int glb_m, glb_k;
     int *glb_A_rowptr = NULL, *glb_A_colidx = NULL;
     double *glb_A_csrval = NULL;
-    if (my_rank == 0) read_mtx_csr(argv[1], &glb_m, &glb_k, glb_n, &glb_A_rowptr, &glb_A_colidx, &glb_A_csrval);
+    if (my_rank == 0) read_mtx_csr(argv[1], need_symm, &glb_m, &glb_k, glb_n, &glb_A_rowptr, &glb_A_colidx, &glb_A_csrval);
     int glb_mk[2] = {glb_m, glb_k};
     MPI_Bcast(&glb_mk[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
     glb_m = glb_mk[0];

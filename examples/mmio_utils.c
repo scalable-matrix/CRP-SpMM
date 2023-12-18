@@ -5,9 +5,13 @@
 
 #include "mmio.h"
 #include "mmio_utils.h"
+#include "utils.h"
 
-// Read a sparse {Real, Pattern, Integer | General, Symmetric} matrix in Matrix Market format
-int mm_read_sparse_RPI_GS(const char *fname, int *nrow_, int *ncol_, int *nnz_, int **row_, int **col_, double **val_)
+// Read a sparse {Real, Pattern, Integer} matrix in Matrix Market format
+int mm_read_sparse_RPI(
+    const char *fname, const int need_symm, int *nrow_, int *ncol_, int *nnz_, 
+    int **row_, int **col_, double **val_
+)
 {
     FILE *f;
     MM_typecode matcode;
@@ -19,22 +23,33 @@ int mm_read_sparse_RPI_GS(const char *fname, int *nrow_, int *ncol_, int *nnz_, 
  
     if (mm_read_banner(f, &matcode) != 0)
     {
-        printf("mm_read_sparse_RPI_GS(): Could not process Matrix Market banner in file [%s]\n", fname);
+        printf("Could not process Matrix Market banner in file [%s]\n", fname);
         return -1;
     }
 
-    valid_type = mm_is_matrix(matcode) && mm_is_sparse(matcode);
-    valid_type = valid_type && (mm_is_real(matcode) || mm_is_pattern(matcode) || mm_is_integer(matcode));
-    valid_type = valid_type && (mm_is_general(matcode) || mm_is_symmetric(matcode));
+    valid_type = mm_is_real(matcode) || mm_is_pattern(matcode) || mm_is_integer(matcode);
+    valid_type = valid_type && mm_is_matrix(matcode) && mm_is_sparse(matcode);
+    int is_general = mm_is_general(matcode);
+    int is_symm = mm_is_symmetric(matcode);
+    valid_type = valid_type && (is_general || is_symm);
+    if (need_symm && !is_symm)
+    {
+        valid_type = 0;
+        fprintf(stderr, "The matrix is not symmetric.\n");
+        fclose(f);
+        return -1;
+    }
     if (!valid_type)
     {
-        fprintf(stderr, "mm_read_sparse_RPI_GS(): does not support Market Market type: [%s]\n", mm_typecode_to_str(matcode));
+        fprintf(stderr, "Does not support Market Market type: [%s]\n", mm_typecode_to_str(matcode));
+        fclose(f);
         return -1;
     }
 
     if (mm_read_mtx_crd_size(f, &nrow, &ncol, &nnz) != 0)
     {
-        fprintf(stderr, "mm_read_sparse_RPI_GS(): could not parse matrix size.\n");
+        fprintf(stderr, "Could not parse matrix size.\n");
+        fclose(f);
         return -1;
     }
 
@@ -139,6 +154,10 @@ void coo2csr(
     int *row_ptr = (int *) malloc(sizeof(int) * (nrow + 1));
     int *col_idx = (int *) malloc(sizeof(int) * nnz);
     double *csr_val = (double *) malloc(sizeof(double) * nnz);
+    ASSERT_PRINTF(
+        row_ptr != NULL && col_idx != NULL && csr_val != NULL, 
+        "Failed to allocate work arrays for %s\n", __FUNCTION__
+    );
 
     // Get the number of non-zeros in each row
     memset(row_ptr, 0, sizeof(int) * (nrow + 1));

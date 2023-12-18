@@ -1,12 +1,13 @@
 include ../makefile.in
 
 CRPSPMM_INSTALL_DIR = ..
+METIS_INSTALL_DIR = ../../metis-5.1.0/install
 
 DEFS    = 
-INCS    = -I$(CRPSPMM_INSTALL_DIR)/include
+INCS    = -I$(CRPSPMM_INSTALL_DIR)/include -I$(METIS_INSTALL_DIR)/include
 CFLAGS  = $(INCS) -Wall -g -std=gnu11 -O3 -fPIC $(DEFS)
 LDFLAGS = -g -O3 -fopenmp
-LIBS    = $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
+LIBS    = -lm $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a $(METIS_INSTALL_DIR)/lib/libmetis.a 
 
 GENCODE_SM60  = -gencode arch=compute_60,code=sm_60
 GENCODE_SM70  = -gencode arch=compute_70,code=sm_70
@@ -55,24 +56,26 @@ EXES    = test_crpspmm.exe crpspmm_calc_partition.exe test_rp_spmm.exe test_spmm
 
 .SECONDARY: $(C_OBJS)
 
+SHARED_OBJS = mmio.c.o mmio_utils.c.o test_utils.c.o
+
 all: $(EXES)
 
 %.c.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-test_crpspmm.exe: mmio.c.o mmio_utils.c.o test_crpspmm.c.o $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+test_crpspmm.exe: $(SHARED_OBJS) test_crpspmm.c.o $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ 
 
-crpspmm_calc_partition.exe: mmio.c.o mmio_utils.c.o crpspmm_calc_partition.c.o 
+crpspmm_calc_partition.exe: $(SHARED_OBJS) crpspmm_calc_partition.c.o 
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
-test_rp_spmm.exe: mmio.c.o mmio_utils.c.o test_rp_spmm.c.o $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
+test_rp_spmm.exe: $(SHARED_OBJS) metis_mat_part.c.o test_rp_spmm.c.o $(LIBS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
-test_spmm_2dpg.exe: mmio.c.o mmio_utils.c.o test_spmm_2dpg.c.o $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
+test_spmm_2dpg.exe: $(SHARED_OBJS) test_spmm_2dpg.c.o $(LIBS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
-test_para2d_spmm.exe: mmio.c.o mmio_utils.c.o test_para2d_spmm.c.o $(CRPSPMM_INSTALL_DIR)/lib/libcrpspmm.a
+test_para2d_spmm.exe: $(SHARED_OBJS) test_para2d_spmm.c.o $(LIBS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 clean:

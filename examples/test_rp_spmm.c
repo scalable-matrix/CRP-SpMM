@@ -2,19 +2,24 @@
 #include "rowpara_spmm.h"
 #include "spmat_part.h"
 #include "mat_redist.h"
+#include "metis_mat_part.h"
 
 int main(int argc, char **argv) 
 {
-    if (argc < 4)
+    if (argc < 5)
     {
-        printf("Usage: %s <mtx-file> <num-of-B-col> <num-of-tests> <check-correct>\n", argv[0]);
+        printf("Usage: %s <mtx-file> <num-of-B-col> <num-of-tests> <part-method> <check-correct>\n", argv[0]);
+        printf("<part-method>: 0 for native 1D partition, 1 for METIS 1D partition (symmetric matrix only)\n");
         printf("<check-correct>: 0 or 1, optional, default value is 0\n");
         return 255;
     }
     int glb_n  = atoi(argv[2]);
     int n_test = atoi(argv[3]);
+    int method = atoi(argv[4]);
     int chk_res = 0;
-    if (argc >= 5) chk_res = atoi(argv[4]);
+    if (argc >= 6) chk_res = atoi(argv[5]);
+    int need_symm = 0;
+    if (method) need_symm = 1;
 
     int nproc, my_rank;
     MPI_Init(&argc, &argv);
@@ -26,7 +31,7 @@ int main(int argc, char **argv)
     int glb_m, glb_k;
     int *glb_A_rowptr = NULL, *glb_A_colidx = NULL;
     double *glb_A_csrval = NULL;
-    if (my_rank == 0) read_mtx_csr(argv[1], &glb_m, &glb_k, glb_n, &glb_A_rowptr, &glb_A_colidx, &glb_A_csrval);
+    if (my_rank == 0) read_mtx_csr(argv[1], need_symm, &glb_m, &glb_k, glb_n, &glb_A_rowptr, &glb_A_colidx, &glb_A_csrval);
     int glb_mk[2] = {glb_m, glb_k};
     MPI_Bcast(&glb_mk[0], 2, MPI_INT, 0, MPI_COMM_WORLD);
     glb_m = glb_mk[0];
@@ -39,11 +44,19 @@ int main(int argc, char **argv)
     int *A_m_displs   = (int *) malloc(sizeof(int) * (nproc + 1));
     int *A_nnz_displs = (int *) malloc(sizeof(int) * (nproc + 1));
     int *x_displs     = (int *) malloc(sizeof(int) * (nproc + 1));
+    int *perm_idx     = (int *) malloc(sizeof(int) * glb_m);
     int *A_m_scnts    = (int *) malloc(sizeof(int) * nproc);
     int *A_nnz_scnts  = (int *) malloc(sizeof(int) * nproc);
     if (my_rank == 0)
     {
-        csr_mat_row_partition(glb_m, glb_A_rowptr, nproc, A_m_displs);
+        if (method == 0)
+        {
+            printf("Using naive 1D row partitioning\n");
+            csr_mat_row_partition(glb_m, glb_A_rowptr, nproc, A_m_displs);
+        } else {
+            printf("Using METIS 1D row partitioning\n");
+            METIS_row_partition(glb_m, nproc, glb_A_rowptr, glb_A_colidx, glb_A_csrval, perm_idx, A_m_displs);
+        }
         for (int i = 0; i <= nproc; i++)
             A_nnz_displs[i] = glb_A_rowptr[A_m_displs[i]];
         
@@ -195,6 +208,7 @@ int main(int argc, char **argv)
     free(A_nnz_scnts);
     free(A_nnz_displs);
     free(x_displs);
+    free(perm_idx);
     free(loc_A_rowptr);
     free(loc_A_colidx);
     free(loc_A_csrval);
