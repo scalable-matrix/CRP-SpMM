@@ -14,6 +14,7 @@ struct rowpara_spmm
     int    rB_self_src_offset;  // Redist B self-to-self source offset
     int    rB_self_dst_offset;  // Redist B self-to-self destination offset
     int    rB_self_nrow;        // Redist B self-to-self number of rows
+    int    rB_p2p;              // Use p2p or alltoallv for redist B
     int    *A_rowptr;           // Size A_nrow + 1, local A matrix CSR row pointer
     int    *A_colidx;           // Size A_nnz, local A matrix CSR column index
     int    *rB_self_src_ridxs;  // Size rB_self_nrow, redist B self-to-self source row indices

@@ -49,31 +49,50 @@ void para2d_spmm_init(
     int A0_nnz     = A_rowptr[A0_nrow] - A_rowptr[0];
     int loc_A_srow = A0_rowptr[pi * pn];
     int loc_A_nrow = A0_rowptr[(pi + 1) * pn] - loc_A_srow;
-    int *loc_A_rcnts   = (int *) malloc(sizeof(int) * pn);
-    int *loc_A_rdispls = (int *) malloc(sizeof(int) * (pn + 1));
-    int *A0_nnzs       = (int *) malloc(sizeof(int) * pn);
-    MPI_Allgather(&A0_nnz, 1, MPI_INT, A0_nnzs, 1, MPI_INT, comm_row);
     int *loc_A_rowptr = (int *) malloc(sizeof(int) * (loc_A_nrow + 1));
-    loc_A_rdispls[0] = 0;
-    for (int i = 0; i < pn; i++)
+    int *loc_A_colidx = NULL;
+    double *loc_A_val = NULL;
+    if (pn > 1)
     {
-        int rank = pi * pn + i;
-        loc_A_rcnts[i] = A0_rowptr[rank + 1] - A0_rowptr[rank];
-        loc_A_rdispls[i + 1] = loc_A_rdispls[i] + loc_A_rcnts[i];
+        int *loc_A_rcnts   = (int *) malloc(sizeof(int) * pn);
+        int *loc_A_rdispls = (int *) malloc(sizeof(int) * (pn + 1));
+        int *A0_nnzs       = (int *) malloc(sizeof(int) * pn);
+        MPI_Allgather(&A0_nnz, 1, MPI_INT, A0_nnzs, 1, MPI_INT, comm_row);
+        loc_A_rdispls[0] = 0;
+        for (int i = 0; i < pn; i++)
+        {
+            int rank = pi * pn + i;
+            loc_A_rcnts[i] = A0_rowptr[rank + 1] - A0_rowptr[rank];
+            loc_A_rdispls[i + 1] = loc_A_rdispls[i] + loc_A_rcnts[i];
+        }
+        MPI_Allgatherv(A_rowptr, loc_A_rcnts[pj], MPI_INT, loc_A_rowptr, loc_A_rcnts, loc_A_rdispls, MPI_INT, comm_row);
+        loc_A_rdispls[0] = 0;
+        for (int i = 0; i < pn; i++)
+        {
+            loc_A_rcnts[i] = A0_nnzs[i];
+            loc_A_rdispls[i + 1] = loc_A_rdispls[i] + loc_A_rcnts[i];
+        }
+        int loc_A_nnz = loc_A_rdispls[pn];
+        loc_A_rowptr[loc_A_nrow] = loc_A_rowptr[0] + loc_A_nnz;
+        loc_A_colidx = (int *)    malloc(sizeof(int)    * loc_A_nnz);
+        loc_A_val    = (double *) malloc(sizeof(double) * loc_A_nnz);
+        MPI_Allgatherv(A_colidx, A0_nnz, MPI_INT,    loc_A_colidx, loc_A_rcnts, loc_A_rdispls, MPI_INT,    comm_row);
+        MPI_Allgatherv(A_val,    A0_nnz, MPI_DOUBLE, loc_A_val,    loc_A_rcnts, loc_A_rdispls, MPI_DOUBLE, comm_row);
+        free(loc_A_rcnts);
+        free(loc_A_rdispls);
+        free(A0_nnzs);
+    } else {
+        int loc_A_nnz = A0_nnz;
+        loc_A_colidx = (int *)    malloc(sizeof(int)    * loc_A_nnz);
+        loc_A_val    = (double *) malloc(sizeof(double) * loc_A_nnz);
+        memcpy(loc_A_rowptr, A_rowptr, sizeof(int) * (loc_A_nrow + 1));
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < loc_A_nnz; i++)
+        {
+            loc_A_colidx[i] = A_colidx[i];
+            loc_A_val[i]    = A_val[i];
+        }
     }
-    MPI_Allgatherv(A_rowptr, loc_A_rcnts[pj], MPI_INT, loc_A_rowptr, loc_A_rcnts, loc_A_rdispls, MPI_INT, comm_row);
-    loc_A_rdispls[0] = 0;
-    for (int i = 0; i < pn; i++)
-    {
-        loc_A_rcnts[i] = A0_nnzs[i];
-        loc_A_rdispls[i + 1] = loc_A_rdispls[i] + loc_A_rcnts[i];
-    }
-    int loc_A_nnz = loc_A_rdispls[pn];
-    loc_A_rowptr[loc_A_nrow] = loc_A_rowptr[0] + loc_A_nnz;
-    int    *loc_A_colidx = (int *)    malloc(sizeof(int)    * loc_A_nnz);
-    double *loc_A_val    = (double *) malloc(sizeof(double) * loc_A_nnz);
-    MPI_Allgatherv(A_colidx, A0_nnz, MPI_INT,    loc_A_colidx, loc_A_rcnts, loc_A_rdispls, MPI_INT,    comm_row);
-    MPI_Allgatherv(A_val,    A0_nnz, MPI_DOUBLE, loc_A_val,    loc_A_rcnts, loc_A_rdispls, MPI_DOUBLE, comm_row);
     et = get_wtime_sec();
     para2d_spmm_->t_ag_A += et - st;
 
@@ -87,9 +106,6 @@ void para2d_spmm_init(
     et = get_wtime_sec();
     para2d_spmm_->t_init += et - st;
 
-    free(loc_A_rcnts);
-    free(loc_A_rdispls);
-    free(A0_nnzs);
     free(loc_A_rowptr);
     free(loc_A_colidx);
     free(loc_A_val);

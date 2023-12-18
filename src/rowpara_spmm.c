@@ -165,6 +165,10 @@ void rp_spmm_init(
     rB_rdispls[nproc] *= glb_n;
     rB_sdispls[nproc] *= glb_n;
 
+    int glb_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &glb_rank);
+    GET_ENV_INT_VAR(rp_spmm_->rB_p2p, "RP_SPMM_P2P", "rB_p2p", 0, 0, 1, glb_rank == 0);
+
     double et = get_wtime_sec();
     rp_spmm_->t_init = et - st;
 
@@ -197,8 +201,9 @@ void rp_spmm_exec(
 )
 {
     if (rp_spmm == NULL) return;
-    int nproc = rp_spmm->nproc;
-    int glb_n = rp_spmm->glb_n;
+    int my_rank = rp_spmm->my_rank;
+    int nproc   = rp_spmm->nproc;
+    int glb_n   = rp_spmm->glb_n;
     double st, et;
     double exec_s = get_wtime_sec();
     
@@ -253,10 +258,41 @@ void rp_spmm_exec(
     ASSERT_PRINTF(rB_recvbuf != NULL, "Failed to allocate work memory for rp_spmm_exec\n");
     int ldrB = (BC_layout == 0) ? glb_n : rB_nrow;
     st = get_wtime_sec();
-    MPI_Alltoallv(
-        rB_sendbuf, rB_scnts, rB_sdispls, MPI_DOUBLE, 
-        rB_recvbuf, rB_rcnts, rB_rdispls, MPI_DOUBLE, rp_spmm->comm
-    );
+    if (rp_spmm->rB_p2p)
+    {
+        MPI_Request *send_reqs = (MPI_Request *) malloc(sizeof(MPI_Request) * nproc);
+        MPI_Request *recv_reqs = (MPI_Request *) malloc(sizeof(MPI_Request) * nproc);
+        int n_send = 0, n_recv = 0;
+        for (int i = 1; i < nproc; i++)
+        {
+            int src_rank = (my_rank + i) % nproc;
+            if (rB_rcnts[src_rank] == 0) continue;
+            MPI_Irecv(
+                rB_recvbuf + rB_rdispls[src_rank], rB_rcnts[src_rank], 
+                MPI_DOUBLE, src_rank, src_rank, rp_spmm->comm, recv_reqs + n_recv
+            );
+            n_recv++;
+        }
+        for (int i = 1; i < nproc; i++)
+        {
+            int dst_rank = (my_rank - i + nproc) % nproc;
+            if (rB_scnts[dst_rank] == 0) continue;
+            MPI_Isend(
+                rB_sendbuf + rB_sdispls[dst_rank], rB_scnts[dst_rank], 
+                MPI_DOUBLE, dst_rank, my_rank, rp_spmm->comm, send_reqs + n_send
+            );
+            n_send++;
+        }
+        MPI_Waitall(n_recv, recv_reqs, MPI_STATUSES_IGNORE);
+        MPI_Waitall(n_send, send_reqs, MPI_STATUSES_IGNORE);
+        free(send_reqs);
+        free(recv_reqs);
+    } else {
+        MPI_Alltoallv(
+            rB_sendbuf, rB_scnts, rB_sdispls, MPI_DOUBLE, 
+            rB_recvbuf, rB_rcnts, rB_rdispls, MPI_DOUBLE, rp_spmm->comm
+        );
+    }
     et = get_wtime_sec();
     rp_spmm->t_a2a += et - st;
     st = get_wtime_sec();

@@ -291,7 +291,7 @@ void crpspmm_engine_init(
         &rd_B, &rd_B_workbuf_bytes
     );
     engine->rd_B = rd_B;
-    GET_ENV_INT_VAR(engine->a2a_B_finegrain, "A2A_B_FINEGRAIN", "a2a_B_finegrain", 0, 0, 1);
+    GET_ENV_INT_VAR(engine->a2a_B_finegrain, "A2A_B_FINEGRAIN", "a2a_B_finegrain", 0, 0, 1, rank_glb == 0);
     if (engine->a2a_B_finegrain == 0)
     {
         int *proc_B_rows = (int *) malloc(sizeof(int) * np_row * 2);

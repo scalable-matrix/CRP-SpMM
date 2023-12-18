@@ -68,7 +68,7 @@ extern "C" {
     } while (0)
 
 
-#define GET_ENV_INT_VAR(var, env_str, var_str, default_val, min_val, max_val) \
+#define GET_ENV_INT_VAR(var, env_str, var_str, default_val, min_val, max_val, print_info) \
     do                                          \
     {                                           \
         char *env_str_p = getenv(env_str);      \
@@ -76,7 +76,11 @@ extern "C" {
         {                                       \
             var = atoi(env_str_p);              \
             if (var < min_val || var > max_val) var = default_val;  \
-            INFO_PRINTF("Overriding parameter %s: %d (default) --> %d (runtime)\n", var_str, default_val, var); \
+            if (print_info && var != default_val)                   \
+            {                                   \
+                INFO_PRINTF("Overriding parameter %s: %d (default) --> %d (runtime)\n",  \
+                var_str, default_val, var);     \
+            }                                   \
         } else {                                \
             var = default_val;                  \
         }                                       \
