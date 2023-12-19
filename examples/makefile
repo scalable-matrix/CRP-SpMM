@@ -49,8 +49,7 @@ endif
 
 C_SRCS 	= $(wildcard *.c)
 C_OBJS  = $(C_SRCS:.c=.c.o)
-EXES    = test_crpspmm.exe crpspmm_calc_partition.exe test_rp_spmm.exe test_spmm_2dpg.exe \
-          test_para2d_spmm.exe
+EXES    = test_rp_spmm.exe test_spmm_2dpg.exe test_para2d_spmm.exe
 # Delete the default old-fashion double-suffix rules
 .SUFFIXES:
 
@@ -62,12 +61,6 @@ all: $(EXES)
 
 %.c.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
-
-test_crpspmm.exe: $(SHARED_OBJS) test_crpspmm.c.o $(LIBS)
-	$(CC) $(LDFLAGS) -o $@ $^ 
-
-crpspmm_calc_partition.exe: $(SHARED_OBJS) crpspmm_calc_partition.c.o $(LIBS)
-	$(CC) $(LDFLAGS) -o $@ $^
 
 test_rp_spmm.exe: $(SHARED_OBJS) test_rp_spmm.c.o $(LIBS)
 	$(CC) $(LDFLAGS) -o $@ $^
