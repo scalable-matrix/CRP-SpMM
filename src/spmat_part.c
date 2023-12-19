@@ -53,7 +53,7 @@ void csr_mat_row_part_comm_size(
     free(thread_flags);
 }
 
-static int prime_factorization(int n, int **factors)
+int prime_factorization(int n, int **factors)
 {
     int nfac = 0, c = 2, max_nfac = (int) ceil(log2((double) n)) + 1;
     int *fac = (int *) malloc(sizeof(int) * max_nfac);
@@ -70,7 +70,7 @@ static int prime_factorization(int n, int **factors)
     return nfac;
 }
 
-// Calculate a 2D process grid dimensions and matrix partitionong for SpMM
+// Calculate a 2D process grid dimensions and matrix partitioning for SpMM
 void calc_spmm_2dpg(
     const int nproc, const int m, const int n, const int k,
     const int *rowptr, const int *colidx, int *pm, int *pn, size_t *comm_cost, 

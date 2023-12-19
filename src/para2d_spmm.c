@@ -96,6 +96,15 @@ void para2d_spmm_init(
     et = get_wtime_sec();
     para2d_spmm_->t_ag_A += et - st;
 
+    if (glb_rank == pm * pn - 1)
+    {
+        int A_nnz = A_rowptr[A0_nrow];
+        const double nnz_cf = 1.5;
+        size_t rA_cost = (size_t) ((double) A_nnz * (double) (pn - 1) * nnz_cf);
+        MPI_Send(&rA_cost, 1, MPI_UNSIGNED_LONG_LONG, 0, 0, comm);
+    }
+    if (glb_rank == 0) MPI_Recv(&para2d_spmm_->rA_cost, 1, MPI_UNSIGNED_LONG_LONG, pm * pn - 1, 0, comm, MPI_STATUS_IGNORE);
+
     // 3. Initialize a rp_spmm struct
     st = get_wtime_sec();
     int loc_BC_n = BC_colptr[pj + 1] - BC_colptr[pj];
@@ -106,6 +115,7 @@ void para2d_spmm_init(
     et = get_wtime_sec();
     para2d_spmm_->t_init += et - st;
 
+    MPI_Comm_free(&comm_row);
     free(loc_A_rowptr);
     free(loc_A_colidx);
     free(loc_A_val);
@@ -166,8 +176,9 @@ void para2d_spmm_print_stat(para2d_spmm_p para2d_spmm)
     if (glb_rank == 0)
     {
         printf("para2d_spmm_init() time = %.2f s\n", t_max[0]);
-        printf("B matrix receive rows (elements) max, total = %zu, %zu", rB_recv_max, rB_recv_sum);
-        printf(" (%zu, %zu)\n", rB_recv_max, rB_recv_sum);
+        printf("Total comm size for replicating A = %zu\n", para2d_spmm->rA_cost);
+        printf("Total comm size for replicating B = %zu\n", rB_recv_sum);
+        printf("Total comm size for SpMM          = %zu\n", para2d_spmm->rA_cost + rB_recv_sum);
         printf("-------------------- Runtime (s) --------------------\n");
         printf("                                     avg         max\n");
         printf("Replicate A matrix (once)         %6.3f      %6.3f\n", t_avg[1], t_max[1]);

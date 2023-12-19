@@ -2,20 +2,24 @@
 #include "para2d_spmm.h"
 #include "spmat_part.h"
 #include "mat_redist.h"
+#include "metis_mat_part.h"
 
 int main(int argc, char **argv) 
 {
-    if (argc < 4)
+    if (argc < 5)
     {
-        printf("Usage: %s <mtx-file> <num-of-B-col> <num-of-tests> <check-correct>\n", argv[0]);
+        printf("Usage: %s <mtx-file> <num-of-B-col> <num-of-tests> <part-method> <check-correct>\n", argv[0]);
+        printf("<part-method>: 0 for native 1D partition, 1 for METIS 1D partition (symmetric matrix only)\n");
         printf("<check-correct>: 0 or 1, optional, default value is 0\n");
         return 255;
     }
     int glb_n  = atoi(argv[2]);
     int n_test = atoi(argv[3]);
+    int method = atoi(argv[4]);
     int chk_res = 0;
-    if (argc >= 5) chk_res = atoi(argv[4]);
+    if (argc >= 6) chk_res = atoi(argv[5]);
     int need_symm = 0;
+    if (method) need_symm = 1;
 
     int nproc, my_rank;
     MPI_Init(&argc, &argv);
@@ -40,11 +44,22 @@ int main(int argc, char **argv)
     int *A0_rowptr = NULL, *B_rowptr = NULL, *AC_rowptr = NULL, *BC_colptr = NULL;
     if (my_rank == 0)
     {
+        int dbg_print = 0;
         st = get_wtime_sec();
-        calc_spmm_2dpg(
-            nproc, glb_m, glb_n, glb_k, glb_A_rowptr, glb_A_colidx, &pm, &pn, 
-            &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, 0
-        );
+        if (method == 0)
+        {
+            calc_spmm_2dpg(
+                nproc, glb_m, glb_n, glb_k, glb_A_rowptr, glb_A_colidx, &pm, &pn, 
+                &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
+            );
+        } else {
+            int *perm = (int *) malloc(sizeof(int) * glb_m);
+            METIS_spmm_2dpg(
+                nproc, glb_m, glb_n, perm, glb_A_rowptr, glb_A_colidx, glb_A_csrval, &pm, &pn, 
+                &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
+            );
+            free(perm);
+        }
         et = get_wtime_sec();
         printf("Rank 0 calculate 2D partitioning time = %.2f s\n", et - st);
         printf("2D process grid: pm, pn = %d, %d\n", pm, pn);

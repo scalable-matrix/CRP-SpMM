@@ -428,11 +428,12 @@ void rp_spmm_print_stat(rp_spmm_p rp_spmm)
         t_max[i] = t_max[i] / n_exec;
         t_avg[i] = t_avg[i] / (n_exec * rp_spmm->nproc);
     }
+    rB_recv_sum *= rp_spmm->glb_n;
+    rB_recv_max *= rp_spmm->glb_n;
     if (my_rank == 0)
     {
-        printf("rp_spmm_init() time = %.2f s\n", t_max[0]);
-        printf("B matrix receive rows (elements) max, total = %zu, %zu", rB_recv_max, rB_recv_sum);
-        printf(" (%zu, %zu)\n", rB_recv_max * rp_spmm->glb_n, rB_recv_sum * rp_spmm->glb_n);
+        printf("rp_spmm_init() time = %.2f s\n", t_max[0]);    
+        printf("Total / rank-max SpMM comm size = %zu, %zu\n", rB_recv_sum, rB_recv_max);
         printf("-------------------- Runtime (s) --------------------\n");
         printf("                                     avg         max\n");
         printf("Pack B matrix for redistribution  %6.3f      %6.3f\n", t_avg[1], t_max[1]);

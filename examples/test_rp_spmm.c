@@ -44,7 +44,7 @@ int main(int argc, char **argv)
     int *A_m_displs   = (int *) malloc(sizeof(int) * (nproc + 1));
     int *A_nnz_displs = (int *) malloc(sizeof(int) * (nproc + 1));
     int *x_displs     = (int *) malloc(sizeof(int) * (nproc + 1));
-    int *perm_idx     = (int *) malloc(sizeof(int) * glb_m);
+    int *perm         = (int *) malloc(sizeof(int) * glb_m);
     int *A_m_scnts    = (int *) malloc(sizeof(int) * nproc);
     int *A_nnz_scnts  = (int *) malloc(sizeof(int) * nproc);
     if (my_rank == 0)
@@ -55,7 +55,7 @@ int main(int argc, char **argv)
             csr_mat_row_partition(glb_m, glb_A_rowptr, nproc, A_m_displs);
         } else {
             printf("Using METIS 1D row partitioning\n");
-            METIS_row_partition(glb_m, nproc, glb_A_rowptr, glb_A_colidx, glb_A_csrval, perm_idx, A_m_displs);
+            METIS_row_partition(glb_m, nproc, glb_A_rowptr, glb_A_colidx, glb_A_csrval, perm, A_m_displs);
         }
         for (int i = 0; i <= nproc; i++)
             A_nnz_displs[i] = glb_A_rowptr[A_m_displs[i]];
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
     free(A_nnz_scnts);
     free(A_nnz_displs);
     free(x_displs);
-    free(perm_idx);
+    free(perm);
     free(loc_A_rowptr);
     free(loc_A_colidx);
     free(loc_A_csrval);

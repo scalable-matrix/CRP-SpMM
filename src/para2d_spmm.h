@@ -8,6 +8,7 @@ struct para2d_spmm
     rp_spmm_p rp_spmm;      // 1D row-parallel spmm
     MPI_Comm  comm_glb;     // Global communicator, shallow copy, do not free it
     MPI_Comm  comm_col;     // Communicator for processes in the same column (for rp_spmm), need to be freed
+    size_t    rA_cost;      // Communication cost of replicating A
     double    t_init;       // Time (s) for para2d_spmm_init()
     double    t_ag_A;       // Time (s) for allgather A
 };

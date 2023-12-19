@@ -30,10 +30,10 @@ void read_mtx_csr(
     printf("B has %d columns\n", glb_n);
     printf("Rank 0 read matrix A from file %s", fname);
     fflush(stdout);
-    double st = MPI_Wtime();
+    double st = omp_get_wtime();
     mm_read_sparse_RPI(fname, need_symm, &glb_m_, &glb_k_, &glb_A_nnz, &glb_A_row, &glb_A_col, &glb_A_val);
     coo2csr(glb_m_, glb_k_, glb_A_nnz, glb_A_row, glb_A_col, glb_A_val, glb_A_rowptr, glb_A_colidx, glb_A_csrval);
-    double et = MPI_Wtime();
+    double et = omp_get_wtime();
     #pragma omp parallel for reduction(max:bandwidth)
     for (int i = 0; i < glb_A_nnz; i++)
     {

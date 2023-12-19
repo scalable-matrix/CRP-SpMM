@@ -18,6 +18,14 @@ extern "C" {
 //   rblk_ptr : Size nblk + 1, row block pointer array
 void csr_mat_row_partition(const int nrow, const int *row_ptr, const int nblk, int *rblk_ptr);
 
+// Prime factorization
+// Input parameter:
+//   n : number to be factorized
+// Output parameters:
+//   <return> : nfac, number of prime factors
+//   *factors : Size nfac, prime factors (small to large) of n, will be allocated
+int prime_factorization(int n, int **factors);
+
 // Compute the SpMV communication sizes for each row block
 // Input parameters:
 //   nrow     : number of rows in the matrix
@@ -36,7 +44,7 @@ void csr_mat_row_part_comm_size(
     int *comm_sizes, int *total_size
 );
 
-// Calculate a 2D process grid dimensions and matrix partitionong for SpMM
+// Calculate a 2D process grid dimensions and matrix partitioning for SpMM
 // Input paratemers:
 //   nproc   : number of processes
 //   m, n, k : size of matrix A (m * k), B (k * n), and C (m * n)

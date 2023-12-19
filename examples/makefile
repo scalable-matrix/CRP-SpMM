@@ -56,7 +56,7 @@ EXES    = test_crpspmm.exe crpspmm_calc_partition.exe test_rp_spmm.exe test_spmm
 
 .SECONDARY: $(C_OBJS)
 
-SHARED_OBJS = mmio.c.o mmio_utils.c.o test_utils.c.o
+SHARED_OBJS = mmio.c.o mmio_utils.c.o test_utils.c.o metis_mat_part.c.o 
 
 all: $(EXES)
 
@@ -66,17 +66,17 @@ all: $(EXES)
 test_crpspmm.exe: $(SHARED_OBJS) test_crpspmm.c.o $(LIBS)
 	$(CC) $(LDFLAGS) -o $@ $^ 
 
-crpspmm_calc_partition.exe: $(SHARED_OBJS) crpspmm_calc_partition.c.o 
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
+crpspmm_calc_partition.exe: $(SHARED_OBJS) crpspmm_calc_partition.c.o $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^
 
-test_rp_spmm.exe: $(SHARED_OBJS) metis_mat_part.c.o test_rp_spmm.c.o $(LIBS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
+test_rp_spmm.exe: $(SHARED_OBJS) test_rp_spmm.c.o $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^
 
 test_spmm_2dpg.exe: $(SHARED_OBJS) test_spmm_2dpg.c.o $(LIBS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
+	$(CC) $(LDFLAGS) -o $@ $^
 
 test_para2d_spmm.exe: $(SHARED_OBJS) test_para2d_spmm.c.o $(LIBS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
+	$(CC) $(LDFLAGS) -o $@ $^
 
 clean:
 	rm -f $(EXES) $(C_OBJS)
