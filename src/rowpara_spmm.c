@@ -37,6 +37,12 @@ void rp_spmm_init(
     rp_spmm_->glb_n   = glb_n;
     rp_spmm_->comm    = comm;
 
+    int glb_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &glb_rank);
+    GET_ENV_INT_VAR(rp_spmm_->rB_p2p,   "RP_SPMM_P2P",   "rB_p2p",   1, 0, 1, glb_rank == 0);
+    GET_ENV_INT_VAR(rp_spmm_->rB_reidx, "RP_SPMM_REIDX", "rB_reidx", 1, 0, 1, glb_rank == 0);
+    int rB_reidx = rp_spmm_->rB_reidx;
+
     // 1. Shrink the row and column ranges of A and count the nonzero rows of B
     int A_nnz = A_rowptr[A_nrow] - A_rowptr[0];
     int A_nnz_sidx = A_rowptr[0];
@@ -64,15 +70,20 @@ void rp_spmm_init(
     int *B_rowflag = (int *) malloc(sizeof(int) * glb_k);
     ASSERT_PRINTF(B_rowflag != NULL, "Failed to allocate work memory for rp_spmm\n");
     memset(B_rowflag, 0, sizeof(int) * glb_k);
-    for (int i = 0; i < A_nnz; i++)
-        B_rowflag[A_colidx[i]] = 1;
+    for (int i = 0; i < A_nnz; i++) B_rowflag[A_colidx[i]] = 1;
     rp_spmm_->A_rowptr = A1_rowptr;
     rp_spmm_->A_colidx = A1_colidx;
     rp_spmm_->A_val    = A1_val;
     rp_spmm_->rB_nrow  = rB_erow - rB_srow + 1;
-
-    int rB_recv_nrow = 0;
-    for (int i = 0; i < glb_k; i++) rB_recv_nrow += B_rowflag[i];
+    int *rB_rowmap = (int *) malloc(sizeof(int) * rp_spmm_->rB_nrow);
+    for (int i = 0; i < rp_spmm_->rB_nrow; i++) rB_rowmap[i] = i;
+    int rB_nnz_row = 0;
+    if (rB_reidx)
+    {
+        for (int i = 0; i < glb_k; i++) if (B_rowflag[i]) rB_rowmap[i - rB_srow] = rB_nnz_row++;
+        for (int i = 0; i < A_nnz; i++) A1_colidx[i] = rB_rowmap[A1_colidx[i]];
+        rp_spmm_->rB_nrow = rB_nnz_row;
+    }
 
     // 2. Find self-to-self copy of B rows
     int rB_self_nrow = 0, rB_self_src_offset = 0, rB_self_dst_offset = 0;
@@ -85,6 +96,7 @@ void rp_spmm_init(
             {
                 rB_self_src_offset = irow - B_row_displs[my_rank];
                 rB_self_dst_offset = irow - rB_srow;
+                if (rB_reidx) rB_self_dst_offset = rB_rowmap[rB_self_dst_offset];
             }
         }
     }
@@ -154,6 +166,12 @@ void rp_spmm_init(
 
     // 5. Some post-processing of counts and indices
     for (int i = 0; i < rB_rdispls[nproc]; i++) rB_rridxs[i] -= rB_srow;
+    if (rB_reidx)
+    {
+        for (int i = 0; i < rB_rdispls[nproc]; i++)
+            rB_rridxs[i] = rB_rowmap[rB_rridxs[i]];
+    }
+    free(rB_rowmap);
     for (int i = 0; i < rB_sdispls[nproc]; i++) rB_sridxs[i] -= B_row_displs[my_rank];
     for (int iproc = 0; iproc < nproc; iproc++)
     {
@@ -164,10 +182,6 @@ void rp_spmm_init(
     }
     rB_rdispls[nproc] *= glb_n;
     rB_sdispls[nproc] *= glb_n;
-
-    int glb_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &glb_rank);
-    GET_ENV_INT_VAR(rp_spmm_->rB_p2p, "RP_SPMM_P2P", "rB_p2p", 0, 0, 1, glb_rank == 0);
 
     double et = get_wtime_sec();
     rp_spmm_->t_init = et - st;
@@ -201,9 +215,10 @@ void rp_spmm_exec(
 )
 {
     if (rp_spmm == NULL) return;
-    int my_rank = rp_spmm->my_rank;
-    int nproc   = rp_spmm->nproc;
-    int glb_n   = rp_spmm->glb_n;
+    int my_rank  = rp_spmm->my_rank;
+    int nproc    = rp_spmm->nproc;
+    int glb_n    = rp_spmm->glb_n;
+    int rB_reidx = rp_spmm->rB_reidx;
     double st, et;
     double exec_s = get_wtime_sec();
     
@@ -254,7 +269,6 @@ void rp_spmm_exec(
     int *rB_rdispls = rp_spmm->rB_rdispls;
     int *rB_rridxs  = rp_spmm->rB_rridxs;
     double *rB_recvbuf = (double *) malloc(sizeof(double) * rB_rdispls[nproc]);
-    double *rB         = (double *) malloc(sizeof(double) * rB_nrow * glb_n);
     ASSERT_PRINTF(rB_recvbuf != NULL, "Failed to allocate work memory for rp_spmm_exec\n");
     int ldrB = (BC_layout == 0) ? glb_n : rB_nrow;
     st = get_wtime_sec();
@@ -296,6 +310,7 @@ void rp_spmm_exec(
     et = get_wtime_sec();
     rp_spmm->t_a2a += et - st;
     st = get_wtime_sec();
+    double *rB = (double *) malloc(sizeof(double) * rB_nrow * glb_n);
     for (int iproc = 0; iproc < nproc; iproc++)
     {
         int *rB_rridxs_i = rB_rridxs + rB_rdispls[iproc] / glb_n;
@@ -344,6 +359,7 @@ void rp_spmm_exec(
             int row_i   = rB_self_src_ridxs[i] - rB_self_src_ridxs[0];
             int src_row = rB_self_src_offset + row_i;
             int dst_row = rB_self_dst_offset + row_i;
+            if (rB_reidx) dst_row = rB_self_dst_offset + i;
             size_t src_offset = (size_t) src_row * (size_t) ldB;
             size_t dst_offset = (size_t) dst_row * (size_t) glb_n;
             const double *src = B + src_offset;
@@ -357,6 +373,7 @@ void rp_spmm_exec(
             int row_i   = rB_self_src_ridxs[i] - rB_self_src_ridxs[0];
             int src_row = rB_self_src_offset + row_i;
             int dst_row = rB_self_dst_offset + row_i;
+            if (rB_reidx) dst_row = rB_self_dst_offset + i;
             const double *src = B + src_row;
             double *dst = rB + dst_row;
             for (int j = 0; j < glb_n; j++)
