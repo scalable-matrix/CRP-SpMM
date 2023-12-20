@@ -33,12 +33,13 @@ void para2d_spmm_init(
 
     // 1. Get the global rank, process grid coordinate, and split communicator
     int glb_rank, pi, pj;
-    MPI_Comm comm_row;
+    MPI_Comm comm_row, comm_row2;
     st = get_wtime_sec();
     MPI_Comm_rank(comm, &glb_rank);
     pi = glb_rank / pn;
     pj = glb_rank % pn;
     MPI_Comm_split(comm, pi, pj, &comm_row);
+    MPI_Comm_split(comm, pi, pj, &comm_row2);
     MPI_Comm_split(comm, pj, pi, &para2d_spmm_->comm_col);
     et = get_wtime_sec();
     para2d_spmm_->t_init += et - st;
@@ -76,8 +77,10 @@ void para2d_spmm_init(
         loc_A_rowptr[loc_A_nrow] = loc_A_rowptr[0] + loc_A_nnz;
         loc_A_colidx = (int *)    malloc(sizeof(int)    * loc_A_nnz);
         loc_A_val    = (double *) malloc(sizeof(double) * loc_A_nnz);
-        MPI_Allgatherv(A_colidx, A0_nnz, MPI_INT,    loc_A_colidx, loc_A_rcnts, loc_A_rdispls, MPI_INT,    comm_row);
-        MPI_Allgatherv(A_val,    A0_nnz, MPI_DOUBLE, loc_A_val,    loc_A_rcnts, loc_A_rdispls, MPI_DOUBLE, comm_row);
+        MPI_Request reqs[2];
+        MPI_Iallgatherv(A_colidx, A0_nnz, MPI_INT,    loc_A_colidx, loc_A_rcnts, loc_A_rdispls, MPI_INT,    comm_row,  &reqs[0]);
+        MPI_Iallgatherv(A_val,    A0_nnz, MPI_DOUBLE, loc_A_val,    loc_A_rcnts, loc_A_rdispls, MPI_DOUBLE, comm_row2, &reqs[1]);
+        MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
         free(loc_A_rcnts);
         free(loc_A_rdispls);
         free(A0_nnzs);
@@ -116,6 +119,7 @@ void para2d_spmm_init(
     para2d_spmm_->t_init += et - st;
 
     MPI_Comm_free(&comm_row);
+    MPI_Comm_free(&comm_row2);
     free(loc_A_rowptr);
     free(loc_A_colidx);
     free(loc_A_val);

@@ -75,10 +75,12 @@ int main(int argc, char **argv)
         BC_colptr = (int *) malloc(sizeof(int) * (pn + 1));
     }
     int pi = my_rank / pn, pj = my_rank % pn;
-    MPI_Bcast(A0_rowptr, nproc + 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(B_rowptr,  pm + 1,    MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(AC_rowptr, pm + 1,    MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(BC_colptr, pn + 1,    MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Request reqs[4];
+    MPI_Ibcast(A0_rowptr, nproc + 1, MPI_INT, 0, MPI_COMM_WORLD, &reqs[0]);
+    MPI_Ibcast(B_rowptr,  pm + 1,    MPI_INT, 0, MPI_COMM_WORLD, &reqs[1]);
+    MPI_Ibcast(AC_rowptr, pm + 1,    MPI_INT, 0, MPI_COMM_WORLD, &reqs[2]);
+    MPI_Ibcast(BC_colptr, pn + 1,    MPI_INT, 0, MPI_COMM_WORLD, &reqs[3]);
+    MPI_Waitall(4, &reqs[0], MPI_STATUSES_IGNORE);
 
     // 3. Rank 0 scatter A according to A0_rowptr
     st = get_wtime_sec();
@@ -135,6 +137,12 @@ int main(int argc, char **argv)
 
     // 5. Compute C := A * B
     para2d_spmm_p para2d_spmm = NULL;
+    // The first para2d_spmm_init() is to warm up A replication (it only exec once) for timing
+    para2d_spmm_init(
+        MPI_COMM_WORLD, pm, pn, A0_rowptr, B_rowptr, AC_rowptr, BC_colptr, 
+        loc_A_rowptr, loc_A_colidx, loc_A_csrval, &para2d_spmm
+    );
+    para2d_spmm_free(&para2d_spmm);
     para2d_spmm_init(
         MPI_COMM_WORLD, pm, pn, A0_rowptr, B_rowptr, AC_rowptr, BC_colptr, 
         loc_A_rowptr, loc_A_colidx, loc_A_csrval, &para2d_spmm
