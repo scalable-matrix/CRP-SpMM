@@ -135,6 +135,12 @@ void METIS_spmm_2dpg(
     int *k_displs   = (int *) malloc(sizeof(int) * (nproc + 1));
     int *comm_sizes = (int *) malloc(sizeof(int) * nproc);
     int nfac, *fac = NULL, tmp;
+    csr_mat_row_part_comm_size(
+        m, m, rowptr, colidx, nproc, row_displs0, 
+        row_displs0, comm_sizes, &tmp
+    );
+    size_t rowpara_cost = (size_t) tmp * (size_t) n;
+    if (dbg_print) printf("Basic 1D row partitioning comm cost: %zu\n", rowpara_cost);
     nfac = prime_factorization(nproc, &fac);
     // If we never choose to split m-dim, we need to initialize m_displs1 to be [0, m]
     m_displs[0] = 0;
@@ -190,6 +196,14 @@ void METIS_spmm_2dpg(
             if (dbg_print) printf("Split m-dim, current pm = %d, pn = %d\n\n", pm_, pn_);
         }
     }  // End of ifac loop
+    if (*comm_cost > rowpara_cost)
+    {
+        pm_ = nproc;
+        pn_ = 1;
+        memcpy(m_displs, row_displs0, sizeof(int) * (nproc + 1));
+        *comm_cost = rowpara_cost;
+        if (dbg_print) printf("Use basic 1D partitioning, pm = %d, pn = %d\n\n", pm_, pn_);
+    }
 
     // 3. Copy the partitioning results
     *pm = pm_;
