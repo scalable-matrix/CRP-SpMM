@@ -18,7 +18,7 @@ void csr_mat_row_partition(const int nrow, const int *row_ptr, const int nblk, i
     {
         int i_max_nnz = (nnz / nblk) * (i + 1);
         if (i == nblk - 1) i_max_nnz = nnz;
-        int st = 0, end = nrow - 1;
+        int st = 0, end = nrow;
         while (st < end)
         {
             int mid = (st + end) / 2;
@@ -80,66 +80,51 @@ int prime_factorization(int n, int **factors)
     return nfac;
 }
 
-// Calculate a 2D process grid dimensions and matrix partitioning for SpMM
-void calc_spmm_2dpg(
-    const int nproc, const int m, const int n, const int k,
+// Calculate a 2D process grid dimensions and matrix partitioning 
+// for SpMM from a 1D row partitioning
+void calc_spmm_part2d_from_1d(
+    const int nproc, const int m, const int n, const int k, const int *rb_displs0,
     const int *rowptr, const int *colidx, int *pm, int *pn, size_t *comm_cost, 
     int **A0_rowptr, int **B_rowptr, int **AC_rowptr, int **BC_colptr, int dbg_print
 )
 {
-    // 1. Compute the basic 1D partitioning
-    int *row_displs0 = (int *) malloc(sizeof(int) * (nproc + 1));
-    double st = get_wtime_sec();
-    csr_mat_row_partition(m, rowptr, nproc, row_displs0);
-    double et = get_wtime_sec();
-    if (dbg_print) printf("Compute basic 1D row partitioning time = %.2f s\n", et - st);
-
-    // 2. Compute the 2D process grid dimensions
     const double nnz_cf = 1.5;  // Cost factor for each nnz (assuming CSR with int32 and double)
-    int pm_ = 1, pn_ = 1;
     int *m_displs   = (int *) malloc(sizeof(int) * (nproc + 1));
     int *m_displs2  = (int *) malloc(sizeof(int) * (nproc + 1));
     int *k_displs   = (int *) malloc(sizeof(int) * (nproc + 1));
     int *comm_sizes = (int *) malloc(sizeof(int) * nproc);
-    int nfac, *fac = NULL, tmp;
+    int tmp;
 
+    // 1. Use basic 1D partitioning as the initial partitioning
+    size_t best_cost = (size_t) tmp * (size_t) n;
+    memcpy(m_displs, rb_displs0, sizeof(int) * (nproc + 1));
+    if (dbg_print) printf("Basic 1D row partitioning comm cost: %zu\n", best_cost);
     // If A is square, we partition the rows of B in the same way as A;
     // otherwise, we evenly partition the rows of B
     if (m == k)
     {
-        memcpy(k_displs, row_displs0, sizeof(int) * (nproc + 1)); 
+        memcpy(k_displs, rb_displs0, sizeof(int) * (nproc + 1)); 
     } else {
         for (int i = 0; i <= nproc; i++) 
             calc_block_spos_size(k, nproc, i, k_displs + i, &tmp);
     }
     csr_mat_row_part_comm_size(
-        m, k, rowptr, colidx, nproc, row_displs0, 
+        m, k, rowptr, colidx, nproc, rb_displs0, 
         k_displs, comm_sizes, &tmp
     );
-    size_t rowpara_cost = (size_t) tmp * (size_t) n;
-    if (dbg_print) printf("Basic 1D row partitioning comm cost: %zu\n", rowpara_cost);
     
-    // If we never choose to split m-dim, we need to initialize m_displs1 to be [0, m]
-    m_displs[0] = 0;
-    m_displs[1] = m;
-    const int A_nnz = rowptr[m];
-    size_t curr_B_copy_cost = 0;  // Originally we do not need to copy any B matrix elements
-
-    nfac = prime_factorization(nproc, &fac);
+    // 2. Compute the 2D process grid dimensions
+    int pm_ = nproc, pn_ = 1, failed_p = -1;
+    int A_nnz = rowptr[m], *fac = NULL;
+    int nfac = prime_factorization(nproc, &fac);
     for (int ifac = 0; ifac < nfac; ifac++)
     {
         int p_i = fac[nfac - 1 - ifac];
-        // If split n-dim, the number of B matrix elements to be copied remains unchanged,
-        // the number of A matrix elements to be copied increases by a factor of p_i
-        size_t A_copy_cost1 = (size_t) ((double) A_nnz * (double) (      pn_ - 1) * nnz_cf);
-        size_t A_copy_cost2 = (size_t) ((double) A_nnz * (double) (p_i * pn_ - 1) * nnz_cf);
-        size_t split_n_cost = A_copy_cost2 + curr_B_copy_cost;
-        // If split m-dim, the number of A matrix copies remains unchanged, needs to 
-        // recalculated the number of B elements to be copied
-        int pm2_ = pm_ * p_i;
-        int n_merge = nproc / pm2_;
+        if (p_i == failed_p) continue;
+        int pn2_ = pn_ * p_i;
+        int pm2_ = nproc / pn2_;
         m_displs2[0] = 0;
-        for (int i = 0; i <= pm2_; i++) m_displs2[i] = row_displs0[i * n_merge];
+        for (int i = 0; i <= pm2_; i++) m_displs2[i] = rb_displs0[i * pn2_];
         // If A is square, we partition the rows of B in the same way as A;
         // otherwise, we evenly partition the rows of B
         if (m == k)
@@ -155,42 +140,28 @@ void calc_spmm_2dpg(
             k_displs, comm_sizes, &tmp
         );
         double et1 = get_wtime_sec();
-        size_t new_B_copy_cost = (size_t) tmp * (size_t) n;
-        size_t split_m_cost = A_copy_cost1 + new_B_copy_cost;
+        size_t A_copy_cost = (size_t) ((double) A_nnz * (double) (pn2_ - 1) * nnz_cf);
+        size_t B_copy_cost = (size_t) tmp * (size_t) n;
+        size_t curr_cost   = A_copy_cost + B_copy_cost;
         if (dbg_print)
         {
             printf("Step %d, factor %d, time = %.2f\n", ifac, p_i, et1 - st1);
-            printf(
-                "Split m-dim (pm = %d, pn = %d) cost: copy A = %zu, copy B = %zu, total = %zu\n", 
-                pm2_, pn_, A_copy_cost1, new_B_copy_cost, split_m_cost
-            );
-            printf(
-                "Split n-dim (pm = %d, pn = %d) cost: copy A = %zu, copy B = %zu, total = %zu\n", 
-                pm_, p_i * pn_, A_copy_cost2, curr_B_copy_cost, split_n_cost
-            );
+            printf("Evaluated: pm = %d, pn = %d, cost = %zu\n", pm2_, pn2_, curr_cost);
+            if (curr_cost < best_cost) printf("Found better partitioning\n");
         }
-        // Choose to split M or N
-        if (split_n_cost < split_m_cost)
+        if (curr_cost < best_cost)
         {
-            pn_ *= p_i;
-            *comm_cost = split_n_cost;
-            if (dbg_print) printf("Split n-dim, current pm = %d, pn = %d\n\n", pm_, pn_);
+            best_cost = curr_cost;
+            pn_ = pn2_;
+            pm_ = pm2_;
+            memcpy(m_displs, m_displs2, sizeof(int) * (pm2_ + 1));
+            failed_p = -1;
         } else {
-            pm_ *= p_i;
-            memcpy(m_displs, m_displs2, sizeof(int) * (pm_ + 1));
-            curr_B_copy_cost = new_B_copy_cost;
-            *comm_cost = split_m_cost;
-            if (dbg_print) printf("Split m-dim, current pm = %d, pn = %d\n\n", pm_, pn_);
+            failed_p = p_i;
         }
     }  // End of ifac loop
-    if (*comm_cost > rowpara_cost)
-    {
-        pm_ = nproc;
-        pn_ = 1;
-        memcpy(m_displs, row_displs0, sizeof(int) * (nproc + 1));
-        *comm_cost = rowpara_cost;
-        if (dbg_print) printf("Use basic 1D partitioning, pm = %d, pn = %d\n\n", pm_, pn_);
-    }
+    *comm_cost = best_cost;
+    if (dbg_print) printf("Final 2D partitioning: pm = %d, pn = %d, cost = %zu\n", pm_, pn_, best_cost);
 
     // 3. Copy the partitioning results
     *pm = pm_;
@@ -230,7 +201,6 @@ void calc_spmm_2dpg(
     }
     *A0_rowptr = A0_rowptr_;
 
-    free(row_displs0);
     free(m_displs);
     free(m_displs2);
     free(k_displs);

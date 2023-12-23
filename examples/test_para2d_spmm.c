@@ -41,6 +41,7 @@ int main(int argc, char **argv)
     // 2. Rank 0 compute 2D process grid and broadcast
     int pm = 0, pn = 0;
     size_t comm_cost = 0;
+    int *A_rb_displs = (int *) malloc(sizeof(int) * (nproc + 1));
     int *A0_rowptr = NULL, *B_rowptr = NULL, *AC_rowptr = NULL, *BC_colptr = NULL;
     if (my_rank == 0)
     {
@@ -48,18 +49,16 @@ int main(int argc, char **argv)
         st = get_wtime_sec();
         if (method == 0)
         {
-            calc_spmm_2dpg(
-                nproc, glb_m, glb_n, glb_k, glb_A_rowptr, glb_A_colidx, &pm, &pn, 
-                &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
-            );
+            csr_mat_row_partition(glb_m, glb_A_rowptr, nproc, A_rb_displs);
         } else {
             int *perm = (int *) malloc(sizeof(int) * glb_m);
-            METIS_spmm_2dpg(
-                nproc, glb_m, glb_n, perm, glb_A_rowptr, glb_A_colidx, glb_A_csrval, &pm, &pn, 
-                &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
-            );
+            METIS_row_partition(glb_m, nproc, glb_A_rowptr, glb_A_colidx, glb_A_csrval, perm, A_rb_displs);
             free(perm);
         }
+        calc_spmm_part2d_from_1d(
+            nproc, glb_m, glb_n, glb_k, A_rb_displs, glb_A_rowptr, glb_A_colidx,
+            &pm, &pn, &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
+        );
         et = get_wtime_sec();
         printf("Rank 0 calculate 2D partitioning time = %.2f s\n", et - st);
         printf("2D process grid: pm, pn = %d, %d\n", pm, pn);

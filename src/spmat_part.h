@@ -44,12 +44,14 @@ void csr_mat_row_part_comm_size(
     int *comm_sizes, int *total_size
 );
 
-// Calculate a 2D process grid dimensions and matrix partitioning for SpMM
+// Calculate a 2D process grid dimensions and matrix partitioning 
+// for SpMM from a 1D row partitioning
 // Input paratemers:
-//   nproc   : number of processes
-//   m, n, k : size of matrix A (m * k), B (k * n), and C (m * n)
-//   rowptr  : Size m + 1, CSR row pointer of A
-//   colidx  : Size rowptr[m], CSR column index of A
+//   nproc      : number of processes
+//   m, n, k    : size of matrix A (m * k), B (k * n), and C (m * n)
+//   rb_displs0 : Size nproc + 1, row block displacements of A
+//   rowptr     : Size m + 1, CSR row pointer of A
+//   colidx     : Size rowptr[m], CSR column index of A
 // Output parameters:
 //   *pm, *pn   : Process grid dimensions, pn groups * pm-way row parallel SpMM
 //   *comm_cost : SpMM communication cost of the partitioning
@@ -66,9 +68,9 @@ void csr_mat_row_part_comm_size(
 //   Before redistributing B, process P_{i, j} owns B(idx_k(i), idx_n(j)).
 //   P_{i, j} computes C(idx_m(i), idx_n(j)) = A(idx_m(i), :) * B(:, idx_n(j)).
 //   {A0, B, AC, BC}_rowptr will be allocated in this function.
-void calc_spmm_2dpg(
-    const int nproc, const int m, const int n, const int k,
-    const int *rowptr, const int *colidx, int *pm, int *pn, size_t *comm_cost,
+void calc_spmm_part2d_from_1d(
+    const int nproc, const int m, const int n, const int k, const int *rb_displs0,
+    const int *rowptr, const int *colidx, int *pm, int *pn, size_t *comm_cost, 
     int **A0_rowptr, int **B_rowptr, int **AC_rowptr, int **BC_colptr, int dbg_print
 );
 

@@ -22,26 +22,31 @@ int main(int argc, char **argv)
 
     int pm = 0, pn = 0, dbg_print = 1;
     size_t comm_cost = 0;
+    int *A_rb_displs = (int *) malloc(sizeof(int) * (nproc + 1));
     int *A0_rowptr = NULL, *B_rowptr = NULL, *AC_rowptr = NULL, *BC_colptr = NULL;
-    double st = get_wtime_sec();
+    double st, et, t1, t2;
+    printf("============================================================\n");
+    st = get_wtime_sec();
     if (method == 0)
     {
-        calc_spmm_2dpg(
-            nproc, m, n, k, rowptr, colidx, &pm, &pn, &comm_cost, 
-            &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
-        );
+        csr_mat_row_partition(m, rowptr, nproc, A_rb_displs);
     } else {
         int *perm = (int *) malloc(sizeof(int) * m);
-        METIS_spmm_2dpg(
-            nproc, m, n, perm, rowptr, colidx, val, &pm, &pn, &comm_cost,
-            &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
-        );
+        METIS_row_partition(m, nproc, rowptr, colidx, val, perm, A_rb_displs);
         free(perm);
     }
-    double et = get_wtime_sec();
-
-    printf("============================================================\n");
-    printf("Calculate partitioning time = %.2f s\n", et - st);
+    et = get_wtime_sec();
+    t1 = et - st;
+    printf("Calculate 1D row partitioning time = %.2f s\n", t1);
+    st = get_wtime_sec();
+    calc_spmm_part2d_from_1d(
+        nproc, m, n, k, A_rb_displs, rowptr, colidx,
+        &pm, &pn, &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
+    );
+    et = get_wtime_sec();
+    t2 = et - st;
+    printf("Calculate 2D partitioning from 1D partitioning time = %.2f s\n", t2);
+    printf("Total partitioning time = %.2f s\n", t1 + t2);
     printf("Calculated 2D grid: pm, pn = %d, %d, comm cost = %zu\n\n", pm, pn, comm_cost);
 
     printf("1D row partitioning of A:\n");
@@ -75,6 +80,7 @@ int main(int argc, char **argv)
     free(val);
     free(rowptr);
     free(colidx);
+    free(A_rb_displs);
     free(A0_rowptr);
     free(B_rowptr);
     free(AC_rowptr);
