@@ -96,9 +96,6 @@ void calc_spmm_part2d_from_1d(
     int tmp;
 
     // 1. Use basic 1D partitioning as the initial partitioning
-    size_t best_cost = (size_t) tmp * (size_t) n;
-    memcpy(m_displs, rb_displs0, sizeof(int) * (nproc + 1));
-    if (dbg_print) printf("Basic 1D row partitioning comm cost: %zu\n", best_cost);
     // If A is square, we partition the rows of B in the same way as A;
     // otherwise, we evenly partition the rows of B
     if (m == k)
@@ -112,6 +109,9 @@ void calc_spmm_part2d_from_1d(
         m, k, rowptr, colidx, nproc, rb_displs0, 
         k_displs, comm_sizes, &tmp
     );
+    size_t best_cost = (size_t) tmp * (size_t) n;
+    memcpy(m_displs, rb_displs0, sizeof(int) * (nproc + 1));
+    if (dbg_print) printf("Basic 1D row partitioning comm cost: %zu\n", best_cost);
     
     // 2. Compute the 2D process grid dimensions
     int pm_ = nproc, pn_ = 1, failed_p = -1;
