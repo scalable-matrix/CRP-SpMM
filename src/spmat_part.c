@@ -12,15 +12,25 @@
 void csr_mat_row_partition(const int nrow, const int *row_ptr, const int nblk, int *rblk_ptr)
 {
     int nnz = row_ptr[nrow];
-    int srow = 0, erow = 0;
     rblk_ptr[0] = 0;
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < nblk; i++)
     {
         int i_max_nnz = (nnz / nblk) * (i + 1);
         if (i == nblk - 1) i_max_nnz = nnz;
-        erow = srow + 1;
-        while (row_ptr[erow] < i_max_nnz) erow++;
-        rblk_ptr[i + 1] = erow;
+        int st = 0, end = nrow - 1;
+        while (st < end)
+        {
+            int mid = (st + end) / 2;
+            if (row_ptr[mid] == i_max_nnz) 
+            {
+                st = mid; 
+                break;
+            }
+            if (row_ptr[mid] < i_max_nnz) st = mid + 1;
+            else end = mid;
+        }
+        rblk_ptr[i + 1] = st;
     }
 }
 
@@ -32,16 +42,16 @@ void csr_mat_row_part_comm_size(
 )
 {
     int n_thread = omp_get_max_threads();
-    int *thread_flags = (int *) malloc(sizeof(int) * n_thread * ncol);
+    char *thread_flags = (char *) malloc(sizeof(char) * n_thread * ncol);
     memset(comm_sizes, 0, sizeof(int) * nblk);
     #pragma omp parallel
     {
-        int *flag = thread_flags + omp_get_thread_num() * ncol;
+        char *flag = thread_flags + omp_get_thread_num() * ncol;
         #pragma omp for schedule(dynamic)
         for (int iblk = 0; iblk < nblk; iblk++)
         {
             int srow = rblk_ptr[iblk], erow = rblk_ptr[iblk + 1], cnt = 0;
-            memset(flag, 0, sizeof(int) * ncol);
+            memset(flag, 0, sizeof(char) * ncol);
             for (int j = row_ptr[srow]; j < row_ptr[erow]; j++) flag[col_idx[j]] = 1;
             for (int i = 0; i < ncol; i++) cnt += flag[i];
             for (int i = x_displs[iblk]; i < x_displs[iblk + 1]; i++) cnt -= flag[i];
@@ -92,18 +102,30 @@ void calc_spmm_2dpg(
     int *k_displs   = (int *) malloc(sizeof(int) * (nproc + 1));
     int *comm_sizes = (int *) malloc(sizeof(int) * nproc);
     int nfac, *fac = NULL, tmp;
+
+    // If A is square, we partition the rows of B in the same way as A;
+    // otherwise, we evenly partition the rows of B
+    if (m == k)
+    {
+        memcpy(k_displs, row_displs0, sizeof(int) * (nproc + 1)); 
+    } else {
+        for (int i = 0; i <= nproc; i++) 
+            calc_block_spos_size(k, nproc, i, k_displs + i, &tmp);
+    }
     csr_mat_row_part_comm_size(
-        m, m, rowptr, colidx, nproc, row_displs0, 
-        row_displs0, comm_sizes, &tmp
+        m, k, rowptr, colidx, nproc, row_displs0, 
+        k_displs, comm_sizes, &tmp
     );
     size_t rowpara_cost = (size_t) tmp * (size_t) n;
     if (dbg_print) printf("Basic 1D row partitioning comm cost: %zu\n", rowpara_cost);
-    nfac = prime_factorization(nproc, &fac);
+    
     // If we never choose to split m-dim, we need to initialize m_displs1 to be [0, m]
     m_displs[0] = 0;
     m_displs[1] = m;
     const int A_nnz = rowptr[m];
     size_t curr_B_copy_cost = 0;  // Originally we do not need to copy any B matrix elements
+
+    nfac = prime_factorization(nproc, &fac);
     for (int ifac = 0; ifac < nfac; ifac++)
     {
         int p_i = fac[nfac - 1 - ifac];
@@ -127,15 +149,17 @@ void calc_spmm_2dpg(
             for (int i = 0; i <= pm2_; i++) 
                 calc_block_spos_size(k, pm2_, i, k_displs + i, &tmp);
         }
+        double st1 = get_wtime_sec();
         csr_mat_row_part_comm_size(
             m, k, rowptr, colidx, pm2_, m_displs2, 
             k_displs, comm_sizes, &tmp
         );
+        double et1 = get_wtime_sec();
         size_t new_B_copy_cost = (size_t) tmp * (size_t) n;
         size_t split_m_cost = A_copy_cost1 + new_B_copy_cost;
         if (dbg_print)
         {
-            printf("Step %d, factor %d\n", ifac, p_i);
+            printf("Step %d, factor %d, time = %.2f\n", ifac, p_i, et1 - st1);
             printf(
                 "Split m-dim (pm = %d, pn = %d) cost: copy A = %zu, copy B = %zu, total = %zu\n", 
                 pm2_, pn_, A_copy_cost1, new_B_copy_cost, split_m_cost
