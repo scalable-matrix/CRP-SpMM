@@ -84,7 +84,7 @@ int prime_factorization(int n, int **factors)
 // for SpMM from a 1D row partitioning
 void calc_spmm_part2d_from_1d(
     const int nproc, const int m, const int n, const int k, const int *rb_displs0,
-    const int *rowptr, const int *colidx, int *pm, int *pn, size_t *comm_cost, 
+    const int *rowptr, const int *colidx, const int rA, int *pm, int *pn, size_t *comm_cost, 
     int **A0_rowptr, int **B_rowptr, int **AC_rowptr, int **BC_colptr, int dbg_print
 )
 {
@@ -141,7 +141,7 @@ void calc_spmm_part2d_from_1d(
         );
         double et1 = get_wtime_sec();
         size_t A_copy_cost = (size_t) ((double) A_nnz * (double) (pn2_ - 1) * nnz_cf);
-        size_t B_copy_cost = (size_t) tmp * (size_t) n;
+        size_t B_copy_cost = (size_t) rA * (size_t) tmp * (size_t) n;
         size_t curr_cost   = A_copy_cost + B_copy_cost;
         if (dbg_print)
         {

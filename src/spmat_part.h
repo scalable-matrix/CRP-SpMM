@@ -52,6 +52,7 @@ void csr_mat_row_part_comm_size(
 //   rb_displs0 : Size nproc + 1, row block displacements of A
 //   rowptr     : Size m + 1, CSR row pointer of A
 //   colidx     : Size rowptr[m], CSR column index of A
+//   rA         : Positive integer, number of times A will be reused
 // Output parameters:
 //   *pm, *pn   : Process grid dimensions, pn groups * pm-way row parallel SpMM
 //   *comm_cost : SpMM communication cost of the partitioning
@@ -70,7 +71,7 @@ void csr_mat_row_part_comm_size(
 //   {A0, B, AC, BC}_rowptr will be allocated in this function.
 void calc_spmm_part2d_from_1d(
     const int nproc, const int m, const int n, const int k, const int *rb_displs0,
-    const int *rowptr, const int *colidx, int *pm, int *pn, size_t *comm_cost, 
+    const int *rowptr, const int *colidx, const int rA, int *pm, int *pn, size_t *comm_cost, 
     int **A0_rowptr, int **B_rowptr, int **AC_rowptr, int **BC_colptr, int dbg_print
 );
 

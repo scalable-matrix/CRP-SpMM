@@ -39,8 +39,9 @@ int main(int argc, char **argv)
     t1 = et - st;
     printf("Calculate 1D row partitioning time = %.2f s\n", t1);
     st = get_wtime_sec();
+    int rA = 1;
     calc_spmm_part2d_from_1d(
-        nproc, m, n, k, A_rb_displs, rowptr, colidx,
+        nproc, m, n, k, A_rb_displs, rowptr, colidx, rA, 
         &pm, &pn, &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
     );
     et = get_wtime_sec();

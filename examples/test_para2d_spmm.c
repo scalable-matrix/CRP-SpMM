@@ -55,8 +55,9 @@ int main(int argc, char **argv)
             METIS_row_partition(glb_m, nproc, glb_A_rowptr, glb_A_colidx, glb_A_csrval, perm, A_rb_displs);
             free(perm);
         }
+        int rA = 1;
         calc_spmm_part2d_from_1d(
-            nproc, glb_m, glb_n, glb_k, A_rb_displs, glb_A_rowptr, glb_A_colidx,
+            nproc, glb_m, glb_n, glb_k, A_rb_displs, glb_A_rowptr, glb_A_colidx, rA, 
             &pm, &pn, &comm_cost, &A0_rowptr, &B_rowptr, &AC_rowptr, &BC_colptr, dbg_print
         );
         et = get_wtime_sec();

@@ -258,7 +258,7 @@ void rp_spmm_exec(
                 for (int i = 0; i < rB_send_nrow; i++)
                     dst_j[i] = src_j[rB_sridxs_i[i]];
             }
-        }
+        }  // End of "if (BC_layout == 0)"
     }  // End of iproc loop
     et = get_wtime_sec();
     rp_spmm->t_pack += et - st;
@@ -306,7 +306,7 @@ void rp_spmm_exec(
             rB_sendbuf, rB_scnts, rB_sdispls, MPI_DOUBLE, 
             rB_recvbuf, rB_rcnts, rB_rdispls, MPI_DOUBLE, rp_spmm->comm
         );
-    }
+    }  // End of "if (rp_spmm->rB_p2p)"
     et = get_wtime_sec();
     rp_spmm->t_a2a += et - st;
     st = get_wtime_sec();
@@ -340,7 +340,7 @@ void rp_spmm_exec(
                 for (int i = 0; i < rB_recv_nrow; i++)
                     dst_j[rB_rridxs_i[i]] = src_j[i];
             }
-        }
+        }  // End of "if (BC_layout == 0)"
     }  // End of iproc loop
     et = get_wtime_sec();
     rp_spmm->t_unpack += et - st;
@@ -379,7 +379,7 @@ void rp_spmm_exec(
             for (int j = 0; j < glb_n; j++)
                 dst[j * rB_nrow] = src[j * ldB];
         }
-    }
+    }  // End of "if (BC_layout == 0)"
     et = get_wtime_sec();
     rp_spmm->t_a2a += et - st;
 
