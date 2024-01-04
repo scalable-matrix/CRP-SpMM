@@ -7,13 +7,17 @@
 extern "C" {
 #endif
 
-// Read a sparse {Real, Pattern, Integer | General, Symmetric} matrix in Matrix Market format
+// Read a sparse {Real, Pattern, Integer} matrix in Matrix Market format
 // Input parameter:
-//   fname : Input Matrix Market file name
+//   fname     : Input Matrix Market file name
+//   need_symm : Whether the matrix must be symmetric
 // Output parameters:
 //   *nrow_, *ncol_, *nnz_  : Number of rows, columns, and nonzeros
 //   **row_, **col_, **val_ : Row indices, column indices, and values
-int mm_read_sparse_RPI_GS(const char *fname, int *nrow_, int *ncol_, int *nnz_, int **row_, int **col_, double **val_);
+int mm_read_sparse_RPI(
+    const char *fname, const int need_symm, int *nrow_, int *ncol_, int *nnz_, 
+    int **row_, int **col_, double **val_
+);
 
 // Convert a COO matrix to a sorted CSR matrix
 // Input parameters:

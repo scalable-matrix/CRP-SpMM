@@ -51,6 +51,7 @@ struct crpspmm_engine
     double t_rd_A, t_agv_A;             // Time (s) for initialization, redistribution of A, and allgatherv of A
     double t_rd_B, t_a2a_B;             // Time (s) for redistribution and alltoallv of B
     double t_spmm, t_rd_C;              // Time (s) for local SpMM, and redistribution of C
+    double t_exec_nr;                   // Time (s) for local SpMM without redistribution
     size_t nelem_A_rd, nelem_A_agv;     // Number of A matrix elements communicated in redistribution and allgatherv
     size_t nelem_B_rd, nelem_B_a2av;    // Number of B matrix elements communicated in redistribution and alltoallv
     size_t nelem_B_a2av_min;            // Minimum number of B matrix elements required to be communicated

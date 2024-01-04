@@ -291,7 +291,7 @@ void crpspmm_engine_init(
         &rd_B, &rd_B_workbuf_bytes
     );
     engine->rd_B = rd_B;
-    GET_ENV_INT_VAR(engine->a2a_B_finegrain, "A2A_B_FINEGRAIN", "a2a_B_finegrain", 0, 0, 1);
+    GET_ENV_INT_VAR(engine->a2a_B_finegrain, "A2A_B_FINEGRAIN", "a2a_B_finegrain", 0, 0, 1, rank_glb == 0);
     if (engine->a2a_B_finegrain == 0)
     {
         int *proc_B_rows = (int *) malloc(sizeof(int) * np_row * 2);
@@ -577,10 +577,11 @@ void crpspmm_engine_exec(
             loc_A_val, agv_A_recvcnts, agv_A_displs, MPI_DOUBLE, engine->comm_row
         );
     }
-    et = MPI_Wtime();
-    engine->t_agv_A += (et - st);
     // Shift the column indices in loc_A_colidx
     for (int i = 0; i < loc_A_nnz; i++) loc_A_colidx[i] -= loc_B_srow;
+    et = MPI_Wtime();
+    engine->t_agv_A   += (et - st);
+    engine->t_exec_nr += (et - st);
 
     // 1.5 Use loc_A_colidx to compute B_min_comm_size
     if (engine->nelem_B_a2av_min == 0)
@@ -638,7 +639,8 @@ void crpspmm_engine_exec(
         }
     }
     et = MPI_Wtime();
-    engine->t_a2a_B += (et - st);
+    engine->t_a2a_B   += (et - st);
+    engine->t_exec_nr += (et - st);
 
     // 3. Local SpMM computation
     st = MPI_Wtime();
@@ -673,7 +675,8 @@ void crpspmm_engine_exec(
     }
     #endif
     et = MPI_Wtime();
-    engine->t_spmm += (et - st);
+    engine->t_spmm    += (et - st);
+    engine->t_exec_nr += (et - st);
 
     // 4. Redistribute C
     st = MPI_Wtime();
@@ -715,27 +718,28 @@ void crpspmm_engine_print_stat(crpspmm_engine_p engine)
     if (engine->rank_glb == 0) printf("crpspmm_engine init time: %.3f s\n", engine->t_init);
     int n_exec = engine->n_exec;
     if (n_exec == 0) return;
-    double t_raw[7], t_min[7], t_max[7], t_avg[7];
+    double t_raw[8], t_min[8], t_max[8], t_avg[8];
     size_t cs_raw[5], cs_min[5], cs_max[5], cs_sum[5];
-    t_raw[0]  = engine->t_exec;
-    t_raw[1]  = engine->t_rd_A;
+    t_raw[0]  = engine->t_rd_A;
+    t_raw[1]  = engine->t_rd_B;
     t_raw[2]  = engine->t_agv_A;
-    t_raw[3]  = engine->t_rd_B;
-    t_raw[4]  = engine->t_a2a_B;
-    t_raw[5]  = engine->t_spmm;
+    t_raw[3]  = engine->t_a2a_B;
+    t_raw[4]  = engine->t_spmm;
+    t_raw[5]  = engine->t_exec_nr;
     t_raw[6]  = engine->t_rd_C;
+    t_raw[7]  = engine->t_exec;
     cs_raw[0] = engine->nelem_A_rd;
     cs_raw[1] = engine->nelem_A_agv;
     cs_raw[2] = engine->nelem_B_rd;
     cs_raw[3] = engine->nelem_B_a2av;
     cs_raw[4] = engine->nelem_B_a2av_min;
-    MPI_Reduce(&t_raw[0], &t_min[0], 7, MPI_DOUBLE, MPI_MIN, 0, engine->comm_glb);
-    MPI_Reduce(&t_raw[0], &t_max[0], 7, MPI_DOUBLE, MPI_MAX, 0, engine->comm_glb);
-    MPI_Reduce(&t_raw[0], &t_avg[0], 7, MPI_DOUBLE, MPI_SUM, 0, engine->comm_glb);
+    MPI_Reduce(&t_raw[0], &t_min[0], 8, MPI_DOUBLE, MPI_MIN, 0, engine->comm_glb);
+    MPI_Reduce(&t_raw[0], &t_max[0], 8, MPI_DOUBLE, MPI_MAX, 0, engine->comm_glb);
+    MPI_Reduce(&t_raw[0], &t_avg[0], 8, MPI_DOUBLE, MPI_SUM, 0, engine->comm_glb);
     MPI_Reduce(&cs_raw[0], &cs_min[0], 5, MPI_UNSIGNED_LONG_LONG, MPI_MIN, 0, engine->comm_glb);
     MPI_Reduce(&cs_raw[0], &cs_max[0], 5, MPI_UNSIGNED_LONG_LONG, MPI_MAX, 0, engine->comm_glb);
     MPI_Reduce(&cs_raw[0], &cs_sum[0], 5, MPI_UNSIGNED_LONG_LONG, MPI_SUM, 0, engine->comm_glb);
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 8; i++)
     {
         t_min[i] /= (double) n_exec;
         t_max[i] /= (double) n_exec;
@@ -745,13 +749,14 @@ void crpspmm_engine_print_stat(crpspmm_engine_p engine)
     {
         printf("-------------------------- Runtime (s) -------------------------\n");
         printf("                                   min         avg         max\n");
-        printf("Redist A to internal 1D layout  %6.3f      %6.3f      %6.3f\n", t_min[1], t_avg[1], t_max[1]);
+        printf("Redist A to internal 1D layout  %6.3f      %6.3f      %6.3f\n", t_min[0], t_avg[0], t_max[0]);
+        printf("Redist B to internal 2D layout  %6.3f      %6.3f      %6.3f\n", t_min[1], t_avg[1], t_max[1]);
         printf("Replicate A with allgatherv     %6.3f      %6.3f      %6.3f\n", t_min[2], t_avg[2], t_max[2]);
-        printf("Redist B to internal 2D layout  %6.3f      %6.3f      %6.3f\n", t_min[3], t_avg[3], t_max[3]);
-        printf("Replicate B with alltoallv      %6.3f      %6.3f      %6.3f\n", t_min[4], t_avg[4], t_max[4]);
-        printf("Local SpMM                      %6.3f      %6.3f      %6.3f\n", t_min[5], t_avg[5], t_max[5]);
+        printf("Replicate B with alltoallv      %6.3f      %6.3f      %6.3f\n", t_min[3], t_avg[3], t_max[3]);
+        printf("Local SpMM                      %6.3f      %6.3f      %6.3f\n", t_min[4], t_avg[4], t_max[4]);
+        printf("SpMM w/o Redist                 %6.3f      %6.3f      %6.3f\n", t_min[5], t_avg[5], t_max[5]);
         printf("Redist C to user's 2D layout    %6.3f      %6.3f      %6.3f\n", t_min[6], t_avg[6], t_max[6]);
-        printf("SpMM total (avg of %3d runs)    %6.3f      %6.3f      %6.3f\n", n_exec, t_min[0], t_avg[0], t_max[0]);
+        printf("SpMM total (avg of %3d runs)    %6.3f      %6.3f      %6.3f\n", n_exec, t_min[7], t_avg[7], t_max[7]);
         printf("----------------------------------------------------------------\n");
         printf("------------------ Communicated Matrix Elements -----------------\n");
         printf("                               min           max            sum\n");
@@ -769,12 +774,13 @@ void crpspmm_engine_print_stat(crpspmm_engine_p engine)
 void crpspmm_engine_clear_stat(crpspmm_engine_p engine)
 {
     if (engine == NULL) return;
-    engine->n_exec  = 0;
-    engine->t_exec  = 0.0;
-    engine->t_rd_A  = 0.0;
-    engine->t_agv_A = 0.0;
-    engine->t_rd_B  = 0.0;
-    engine->t_a2a_B = 0.0;
-    engine->t_spmm  = 0.0;
-    engine->t_rd_C  = 0.0;
+    engine->n_exec    = 0;
+    engine->t_exec    = 0.0;
+    engine->t_rd_A    = 0.0;
+    engine->t_agv_A   = 0.0;
+    engine->t_rd_B    = 0.0;
+    engine->t_a2a_B   = 0.0;
+    engine->t_spmm    = 0.0;
+    engine->t_rd_C    = 0.0;
+    engine->t_exec_nr = 0.0;
 }

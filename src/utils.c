@@ -1,6 +1,6 @@
 // @brief    : Some helper functions I use here and there
 // @author   : Hua Huang <huangh223@gatech.edu>
-// @modified : 2022-01-19
+// @modified : 2023-12-17
 
 #include <stdio.h>
 #include <string.h>
@@ -154,21 +154,10 @@ void print_matrix(
     #undef PRINT_MATRIX
 }
 
-// Transpose a column matrix (OMP parallelized, but not optimized)
-void transpose_cm_mat(
-    const int nrow, const int ncol, const double *A, const int ldA,
-    double *AT, const int ldAT
-)
+// Dump binary to file
+void dump_binary(const char *fname, void *data, const size_t bytes)
 {
-    // TODO: use blocking
-    #pragma omp parallel for
-    for (int j = 0; j < ncol; j++)
-    {
-        for (int i = 0; i < nrow; i++)
-        {
-            int idx0 = i * ldA  + j;
-            int idx1 = j * ldAT + i;
-            AT[idx1] = A[idx0];
-        }
-    }
+    FILE *fp = fopen(fname, "wb");
+    fwrite(data, 1, bytes, fp);
+    fclose(fp);
 }
